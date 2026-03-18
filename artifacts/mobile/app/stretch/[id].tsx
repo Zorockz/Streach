@@ -11,14 +11,13 @@ import {
   View,
 } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { StretchIcon } from "@/components/StretchIcon";
 import { STRETCHES, STRETCH_CATEGORIES } from "@/constants/stretches";
 
 export default function StretchDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const insets = useSafeAreaInsets();
   const stretch = STRETCHES.find(s => s.id === id);
   const primaryArea = stretch?.bodyArea[0];
   const cat = STRETCH_CATEGORIES.find(c => c.id === primaryArea);
@@ -43,7 +42,7 @@ export default function StretchDetailScreen() {
   const dLabel = d < 60 ? `${d}s` : `${Math.floor(d / 60)}m${d % 60 > 0 ? ` ${d % 60}s` : ""}`;
 
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom + 16 }]}>
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
       <View style={styles.handle} />
 
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -120,7 +119,7 @@ export default function StretchDetailScreen() {
           <Text style={styles.closeBtnText}>Close</Text>
         </Pressable>
       </Animated.View>
-    </View>
+    </SafeAreaView>
   );
 }
 

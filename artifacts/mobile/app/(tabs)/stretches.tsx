@@ -110,11 +110,11 @@ export default function StretchesScreen() {
             <View style={styles.groupHeader}>
               <StretchIcon
                 mciIcon={group.category.mciIcon}
-                size={18}
+                size={22}
                 color={group.category.color}
                 bgColor={group.category.bgColor}
-                boxSize={40}
-                borderRadius={11}
+                boxSize={50}
+                borderRadius={14}
               />
               <View style={{ flex: 1 }}>
                 <Text style={styles.groupTitle}>{group.category.label}</Text>
