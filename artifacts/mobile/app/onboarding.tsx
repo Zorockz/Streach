@@ -103,7 +103,6 @@ function FloatingIcon({ name, color, bgColor }: { name: string; color: string; b
 function StepWelcome({ onNext }: { onNext: () => void }) {
   return (
     <View style={styles.step}>
-      <FloatingIcon name="leaf-outline" color={Colors.primary} bgColor={Colors.primaryMuted} />
       <Animated.Text entering={FadeInDown.duration(500).delay(200)} style={styles.h1}>
         Welcome to{"\n"}StretchGate
       </Animated.Text>
