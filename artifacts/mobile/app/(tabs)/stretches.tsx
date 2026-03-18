@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -140,8 +141,6 @@ export default function StretchesScreen() {
     </SafeAreaView>
   );
 }
-
-import { Platform } from "react-native";
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },

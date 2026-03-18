@@ -439,18 +439,18 @@ export const STRETCHES: Stretch[] = [
 ];
 
 export const DISTRACTING_APPS = [
-  { id: 'tiktok', name: 'TikTok', icon: 'logo-tiktok', color: '#010101' },
-  { id: 'instagram', name: 'Instagram', icon: 'logo-instagram', color: '#E1306C' },
-  { id: 'youtube', name: 'YouTube', icon: 'logo-youtube', color: '#FF0000' },
-  { id: 'twitter', name: 'X / Twitter', icon: 'logo-twitter', color: '#1DA1F2' },
-  { id: 'reddit', name: 'Reddit', icon: 'logo-reddit', color: '#FF4500' },
-  { id: 'facebook', name: 'Facebook', icon: 'logo-facebook', color: '#1877F2' },
-  { id: 'snapchat', name: 'Snapchat', icon: 'logo-snapchat', color: '#FFCA00' },
-  { id: 'pinterest', name: 'Pinterest', icon: 'logo-pinterest', color: '#E60023' },
-  { id: 'discord', name: 'Discord', icon: 'logo-discord', color: '#5865F2' },
-  { id: 'twitch', name: 'Twitch', icon: 'logo-twitch', color: '#9146FF' },
-  { id: 'linkedin', name: 'LinkedIn', icon: 'logo-linkedin', color: '#0A66C2' },
-  { id: 'news', name: 'News & feeds', icon: 'newspaper-outline', color: '#34495E' },
+  { id: 'tiktok',     name: 'TikTok',       bundleId: 'com.zhiliaoapp.musically',   icon: 'logo-tiktok',      color: '#010101' },
+  { id: 'instagram',  name: 'Instagram',    bundleId: 'com.burbn.instagram',         icon: 'logo-instagram',   color: '#E1306C' },
+  { id: 'youtube',    name: 'YouTube',      bundleId: 'com.google.ios.youtube',      icon: 'logo-youtube',     color: '#FF0000' },
+  { id: 'twitter',    name: 'X / Twitter',  bundleId: 'com.atebits.Tweetie2',        icon: 'logo-twitter',     color: '#1DA1F2' },
+  { id: 'reddit',     name: 'Reddit',       bundleId: 'com.reddit.Reddit',           icon: 'logo-reddit',      color: '#FF4500' },
+  { id: 'facebook',   name: 'Facebook',     bundleId: 'com.facebook.Facebook',       icon: 'logo-facebook',    color: '#1877F2' },
+  { id: 'snapchat',   name: 'Snapchat',     bundleId: 'com.toyopagroup.picaboo',     icon: 'logo-snapchat',    color: '#FFCA00' },
+  { id: 'discord',    name: 'Discord',      bundleId: 'com.hammerandchisel.discord', icon: 'logo-discord',     color: '#5865F2' },
+  { id: 'twitch',     name: 'Twitch',       bundleId: 'tv.twitch',                   icon: 'logo-twitch',      color: '#9146FF' },
+  { id: 'linkedin',   name: 'LinkedIn',     bundleId: 'com.linkedin.LinkedIn',       icon: 'logo-linkedin',    color: '#0A66C2' },
+  { id: 'pinterest',  name: 'Pinterest',    bundleId: 'com.pinterest',               icon: 'logo-pinterest',   color: '#E60023' },
+  { id: 'news',       name: 'News & feeds', bundleId: '',                            icon: 'newspaper-outline', color: '#34495E' },
 ];
 
 export function getStretchesForAreas(areas: BodyArea[]): Stretch[] {
@@ -458,8 +458,17 @@ export function getStretchesForAreas(areas: BodyArea[]): Stretch[] {
   return STRETCHES.filter(s => s.bodyArea.some(a => areas.includes(a) || a === 'full'));
 }
 
-export function getRandomStretch(areas: BodyArea[] = []): Stretch {
-  const pool = getStretchesForAreas(areas);
+export function getRandomStretch(
+  areas: BodyArea[] = [],
+  excludeIds: string[] = [],
+  maxDuration?: number
+): Stretch {
+  let pool = getStretchesForAreas(areas).filter(s => !excludeIds.includes(s.id));
+  if (maxDuration) {
+    const durationFiltered = pool.filter(s => s.durationSeconds <= maxDuration);
+    if (durationFiltered.length > 0) pool = durationFiltered;
+  }
+  if (pool.length === 0) pool = getStretchesForAreas(areas);
   return pool[Math.floor(Math.random() * pool.length)];
 }
 

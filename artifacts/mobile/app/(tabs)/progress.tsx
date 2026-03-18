@@ -4,6 +4,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -52,6 +53,12 @@ function WeekChart({ sessions }: { sessions: StretchSession[] }) {
 
 // --- 30-day calendar heatmap ---
 function MonthHeatmap({ sessions }: { sessions: StretchSession[] }) {
+  const { width } = useWindowDimensions();
+  const COLS = 7;
+  const CARD_PADDING = 36;
+  const GAP = 4;
+  const cellSize = Math.floor((width - CARD_PADDING * 2 - GAP * (COLS - 1)) / COLS);
+
   const today = new Date();
   const cells = Array.from({ length: 35 }, (_, i) => {
     const d = new Date(today);
@@ -63,33 +70,27 @@ function MonthHeatmap({ sessions }: { sessions: StretchSession[] }) {
   });
 
   return (
-    <View style={heatmap.grid}>
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: GAP }}>
       {cells.map((c, i) => (
         <View
           key={i}
           style={[
-            heatmap.cell,
-            c.count === 0 && heatmap.cellEmpty,
-            c.count === 1 && heatmap.cellLow,
-            c.count === 2 && heatmap.cellMid,
-            c.count >= 3 && heatmap.cellHigh,
-            c.isToday && heatmap.cellToday,
+            {
+              width: cellSize,
+              height: cellSize,
+              borderRadius: Math.floor(cellSize * 0.2),
+            },
+            c.count === 0 && { backgroundColor: Colors.bgSurface },
+            c.count === 1 && { backgroundColor: "rgba(58, 122, 92, 0.3)" },
+            c.count === 2 && { backgroundColor: "rgba(58, 122, 92, 0.6)" },
+            c.count >= 3 && { backgroundColor: Colors.primary },
+            c.isToday && { borderWidth: 2, borderColor: Colors.accent },
           ]}
         />
       ))}
     </View>
   );
 }
-
-const heatmap = StyleSheet.create({
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 5 },
-  cell: { width: 32, height: 32, borderRadius: 7 },
-  cellEmpty: { backgroundColor: Colors.bgSurface },
-  cellLow: { backgroundColor: "rgba(58, 122, 92, 0.3)" },
-  cellMid: { backgroundColor: "rgba(58, 122, 92, 0.6)" },
-  cellHigh: { backgroundColor: Colors.primary },
-  cellToday: { borderWidth: 2, borderColor: Colors.accent },
-});
 
 const chart = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "flex-end", height: 100, gap: 0 },

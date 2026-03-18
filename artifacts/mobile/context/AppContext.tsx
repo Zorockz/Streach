@@ -19,6 +19,9 @@ export interface AppSettings {
   dailyGoal: number;
   hapticEnabled: boolean;
   reminderEnabled: boolean;
+  unlockWindowMinutes: number;
+  isLockActive: boolean;
+  lastUnlockedAt?: string;
 }
 
 interface AppContextValue {
@@ -41,6 +44,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   dailyGoal: 3,
   hapticEnabled: true,
   reminderEnabled: false,
+  unlockWindowMinutes: 15,
+  isLockActive: false,
+  lastUnlockedAt: undefined,
 };
 
 const STORAGE_KEYS = {
@@ -50,8 +56,15 @@ const STORAGE_KEYS = {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+function getLocalDateStr(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function getTodayISO() {
-  return new Date().toISOString().split('T')[0];
+  return getLocalDateStr();
 }
 
 function calculateStreak(sessions: StretchSession[]): number {
@@ -61,7 +74,7 @@ function calculateStreak(sessions: StretchSession[]): number {
   const days = Array.from(daySet).sort().reverse();
 
   const today = getTodayISO();
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const yesterday = getLocalDateStr(new Date(Date.now() - 86400000));
 
   if (days[0] !== today && days[0] !== yesterday) return 0;
 
@@ -103,21 +116,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updateSettings = useCallback(async (updates: Partial<AppSettings>) => {
-    const newSettings = { ...settings, ...updates };
-    setSettings(newSettings);
-    await AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(newSettings));
-  }, [settings]);
+    setSettings(prev => {
+      const newSettings = { ...prev, ...updates };
+      AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(newSettings));
+      return newSettings;
+    });
+  }, []);
 
   const recordSession = useCallback(async (session: Omit<StretchSession, 'id' | 'completedAt'>) => {
-    const newSession: StretchSession = {
-      ...session,
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      completedAt: new Date().toISOString(),
-    };
-    const newSessions = [newSession, ...sessions];
-    setSessions(newSessions);
-    await AsyncStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(newSessions));
-  }, [sessions]);
+    const now = new Date().toISOString();
+    const oneMinAgo = new Date(Date.now() - 60000).toISOString();
+
+    setSessions(prev => {
+      const recentDupe = prev.find(
+        s => s.stretchId === session.stretchId && s.completedAt > oneMinAgo
+      );
+      if (recentDupe) return prev;
+
+      const newSession: StretchSession = {
+        ...session,
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        completedAt: now,
+      };
+      const newSessions = [newSession, ...prev];
+      AsyncStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(newSessions));
+      return newSessions;
+    });
+  }, []);
 
   const clearAllData = useCallback(async () => {
     await AsyncStorage.multiRemove([STORAGE_KEYS.SETTINGS, STORAGE_KEYS.SESSIONS]);

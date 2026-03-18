@@ -5,8 +5,8 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
-    "userInterfaceStyle": "dark",
+    "scheme": "stretchgate",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash-icon.png",
@@ -14,19 +14,16 @@
       "backgroundColor": "#0F2820"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.stretchgate.app",
+      "buildNumber": "1"
     },
     "android": {},
     "web": {
       "favicon": "./assets/images/icon.png"
     },
     "plugins": [
-      [
-        "expo-router",
-        {
-          "origin": "https://replit.com/"
-        }
-      ],
+      ["expo-router", { "origin": "https://replit.com/" }],
       "expo-font",
       "expo-web-browser"
     ],

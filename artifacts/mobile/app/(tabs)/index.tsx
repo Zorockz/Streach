@@ -58,15 +58,17 @@ function StartButton({ onPress }: { onPress: () => void }) {
 }
 
 export default function HomeScreen() {
-  const { settings, todayCount, currentStreak, totalSessions } = useApp();
+  const { settings, sessions, todayCount, currentStreak, totalSessions } = useApp();
   const lockedApps = DISTRACTING_APPS.filter(a => settings.lockedApps.includes(a.id));
   const progress = Math.min(todayCount / (settings.dailyGoal || 3), 1);
   const goalMet = todayCount >= (settings.dailyGoal || 3);
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
+  const recentIds = sessions.slice(0, 3).map(s => s.stretchId);
+
   const handleStart = () => {
-    const s = getRandomStretch(settings.focusBodyAreas);
+    const s = getRandomStretch(settings.focusBodyAreas, recentIds, settings.preferredDuration);
     router.push({ pathname: "/stretch/session", params: { stretchId: s.id } });
   };
 
@@ -153,7 +155,14 @@ export default function HomeScreen() {
             <Text style={styles.cardSub}>Stretch before you open these — honor system</Text>
             <View style={styles.appsWrap}>
               {lockedApps.map(app => (
-                <Pressable key={app.id} style={styles.appChip} onPress={handleStart}>
+                <Pressable
+                  key={app.id}
+                  style={styles.appChip}
+                  onPress={() => {
+                    const s = getRandomStretch(settings.focusBodyAreas, recentIds, settings.preferredDuration);
+                    router.push({ pathname: "/stretch/session", params: { stretchId: s.id, targetApp: app.name } });
+                  }}
+                >
                   <Ionicons name={app.icon as any} size={13} color={Colors.textSecondary} />
                   <Text style={styles.appChipText}>{app.name}</Text>
                 </Pressable>

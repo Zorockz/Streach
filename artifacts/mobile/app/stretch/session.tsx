@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Platform,
   Pressable,
-  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -16,12 +16,14 @@ import Animated, {
   FadeIn,
   FadeInDown,
   interpolate,
+  useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withSequence,
   withTiming,
 } from "react-native-reanimated";
+import Svg, { Circle } from "react-native-svg";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { StretchIcon } from "@/components/StretchIcon";
@@ -34,7 +36,47 @@ type Breath = "in" | "hold" | "out";
 const BREATH_CYCLE = { in: 4000, hold: 2000, out: 5000 };
 const BREATH_LABEL: Record<Breath, string> = { in: "Breathe in", hold: "Hold", out: "Breathe out" };
 
-function BreathingOrb({ isRunning, phase }: { isRunning: boolean; phase: Breath }) {
+function TimerRing({ progress }: { progress: number }) {
+  const R = 108;
+  const CIRC = 2 * Math.PI * R;
+  const animProg = useSharedValue(0);
+
+  useEffect(() => {
+    animProg.value = withTiming(progress, {
+      duration: 500,
+      easing: Easing.linear,
+    });
+  }, [progress]);
+
+  const animatedProps = useAnimatedProps(() => ({
+    strokeDashoffset: CIRC * (1 - animProg.value),
+  }));
+
+  const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+  return (
+    <Svg width={240} height={240} style={{ position: "absolute" }}>
+      <Circle
+        cx={120} cy={120} r={R}
+        fill="none"
+        stroke={Colors.bgSurface}
+        strokeWidth={5}
+      />
+      <AnimatedCircle
+        cx={120} cy={120} r={R}
+        fill="none"
+        stroke={Colors.primary}
+        strokeWidth={5}
+        strokeLinecap="round"
+        strokeDasharray={CIRC}
+        animatedProps={animatedProps}
+        transform="rotate(-90 120 120)"
+      />
+    </Svg>
+  );
+}
+
+function BreathingOrb({ isRunning, phase, mciIcon }: { isRunning: boolean; phase: Breath; mciIcon: string }) {
   const scale = useSharedValue(1);
   const opacity = useSharedValue(0.35);
 
@@ -81,8 +123,9 @@ function BreathingOrb({ isRunning, phase }: { isRunning: boolean; phase: Breath 
       <Animated.View style={[orb.outer, outerStyle]} />
       <Animated.View style={[orb.inner, innerStyle, { backgroundColor: fillColor }]} />
       <View style={orb.iconWrap} pointerEvents="none">
-        <Ionicons
-          name="body-outline" size={36}
+        <MaterialCommunityIcons
+          name={mciIcon as any}
+          size={44}
           color={isRunning && phase !== "out" ? Colors.white : Colors.textSecondary}
         />
       </View>
@@ -119,6 +162,13 @@ export default function StretchSessionScreen() {
 
   const remaining = Math.max(0, duration - elapsed);
   const progress = Math.min(elapsed / duration, 1);
+
+  const instrIndex = phase === "running"
+    ? Math.min(
+        Math.floor((elapsed / duration) * (stretch?.instructions.length ?? 1)),
+        (stretch?.instructions.length ?? 1) - 1
+      )
+    : 0;
 
   const clearTimers = () => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -161,13 +211,14 @@ export default function StretchSessionScreen() {
     await recordSession({
       stretchId: stretch.id,
       stretchName: stretch.name,
-      durationSeconds: duration,
+      durationSeconds: elapsed,
       targetApp,
     });
     router.back();
   };
 
   const handleEarlyDone = () => {
+    if (elapsed < 10) return;
     clearTimers();
     setPhase("done");
     if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -239,9 +290,21 @@ export default function StretchSessionScreen() {
         </View>
       )}
 
-      {/* Orb */}
+      {/* Orb + ring */}
       <View style={styles.orbSection}>
-        <BreathingOrb isRunning={phase === "running"} phase={breathPhase} />
+        <View style={{ width: 240, height: 240, alignItems: "center", justifyContent: "center" }}>
+          {phase === "running" && <TimerRing progress={progress} />}
+          <BreathingOrb isRunning={phase === "running"} phase={breathPhase} mciIcon={stretch.mciIcon} />
+        </View>
+        {phase === "running" && (
+          <Animated.Text
+            key="bigTimer"
+            entering={FadeIn.duration(300)}
+            style={styles.bigTimer}
+          >
+            {formatTime(remaining)}
+          </Animated.Text>
+        )}
         <Animated.Text
           key={phase === "running" ? breathPhase : phase}
           entering={FadeIn.duration(400)}
@@ -256,17 +319,27 @@ export default function StretchSessionScreen() {
         </Animated.Text>
       </View>
 
-      {/* Instruction cards */}
+      {/* Auto-advancing instruction */}
       {stretch.instructions.length > 0 && phase !== "done" && (
         <View style={styles.instrWrap}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }}>
-            {stretch.instructions.map((step, i) => (
-              <View key={i} style={styles.instrCard}>
-                <Text style={styles.instrNumText}>{i + 1}</Text>
-                <Text style={styles.instrText}>{step}</Text>
-              </View>
+          <Animated.Text
+            key={instrIndex}
+            entering={FadeIn.duration(400)}
+            style={styles.instrSingle}
+          >
+            {stretch.instructions[instrIndex]}
+          </Animated.Text>
+          <View style={styles.instrDots}>
+            {stretch.instructions.map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.instrDot,
+                  i === instrIndex && styles.instrDotActive,
+                ]}
+              />
             ))}
-          </ScrollView>
+          </View>
         </View>
       )}
 
@@ -345,18 +418,43 @@ const styles = StyleSheet.create({
   progressTrack: { height: 3, backgroundColor: Colors.bgSurface, borderRadius: 2, overflow: "hidden" },
   progressFill: { height: "100%", backgroundColor: Colors.primary, borderRadius: 2 },
   orbSection: { flex: 1, alignItems: "center", justifyContent: "center", gap: 24 },
+  bigTimer: {
+    fontSize: 52,
+    fontFamily: "DM_Sans_700Bold",
+    color: Colors.text,
+    letterSpacing: -2,
+    lineHeight: 56,
+    marginTop: 8,
+  },
   breathLabel: {
     fontSize: 22, fontFamily: "DM_Sans_600SemiBold",
     color: Colors.textSecondary, letterSpacing: -0.2,
   },
-  instrWrap: { width: "100%", paddingLeft: 20, marginBottom: 8 },
-  instrCard: {
-    backgroundColor: Colors.bgCard, borderRadius: 12, padding: 12,
-    marginRight: 10, width: 200,
-    borderWidth: 1, borderColor: Colors.divider,
+  instrWrap: { width: "100%", paddingHorizontal: 20, marginBottom: 8, alignItems: "center" },
+  instrSingle: {
+    fontSize: 15,
+    fontFamily: "DM_Sans_500Medium",
+    color: Colors.textSecondary,
+    textAlign: "center",
+    lineHeight: 22,
+    paddingHorizontal: 32,
   },
-  instrNumText: { fontSize: 11, fontFamily: "DM_Sans_700Bold", color: Colors.primary, marginBottom: 4 },
-  instrText: { fontSize: 12, fontFamily: "DM_Sans_400Regular", color: Colors.textSecondary, lineHeight: 17 },
+  instrDots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 5,
+    marginTop: 10,
+  },
+  instrDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: Colors.bgSurface,
+  },
+  instrDotActive: {
+    backgroundColor: Colors.primary,
+    width: 14,
+  },
   footer: { width: "100%", paddingHorizontal: 24, paddingBottom: 8, alignItems: "center" },
   startBtn: {
     flexDirection: "row", alignItems: "center",

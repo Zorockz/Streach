@@ -1,0 +1,516 @@
+You are a senior React Native / Expo engineer. I need you to fix a series of bugs and improvements in my StretchGate app. Fix ALL of them in order. After every fix, confirm what you changed. When all fixes are done, commit and push everything to GitHub.
+
+The app is located at: artifacts/mobile/
+
+Here are ALL the fixes to make, in order:
+
+---
+
+## FIX 1 — stretches.tsx: Move Platform import to top
+
+FILE: artifacts/mobile/app/(tabs)/stretches.tsx
+
+PROBLEM: Platform is imported at the bottom of the file (around line 115) AFTER it is already used in the handleArea function. This causes a crash.
+
+FIX: Remove the standalone `import { Platform } from "react-native"` line at the bottom of the file. Then find the existing import from "react-native" at the top of the file and add Platform to it so it reads:
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+
+---
+
+## FIX 2 — app.json: Fix scheme, add bundleIdentifier, fix userInterfaceStyle
+
+FILE: artifacts/mobile/app.json
+
+CHANGE 1: scheme — change "mobile" to "stretchgate"
+CHANGE 2: under "ios", add: "bundleIdentifier": "com.stretchgate.app"
+CHANGE 3: change "userInterfaceStyle" from "dark" to "light"
+CHANGE 4: under "ios", add: "buildNumber": "1"
+
+Result should look like:
+{
+  "expo": {
+    "name": "StretchGate",
+    "slug": "mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "stretchgate",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F2820"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.stretchgate.app",
+      "buildNumber": "1"
+    },
+    "android": {},
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      ["expo-router", { "origin": "https://replit.com/" }],
+      "expo-font",
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
+
+---
+
+## FIX 3 — AppContext.tsx: Fix timezone bug in streak calculation
+
+FILE: artifacts/mobile/context/AppContext.tsx
+
+PROBLEM: The calculateStreak function uses `new Date(Date.now() - 86400000).toISOString().split('T')[0]` for "yesterday" which gives the wrong date near midnight in non-UTC timezones.
+
+FIX: Add this helper function at the top of the file, just above getTodayISO:
+
+function getLocalDateStr(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+Then replace getTodayISO with:
+function getTodayISO() {
+  return getLocalDateStr();
+}
+
+Then inside calculateStreak, replace the yesterday line:
+const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+with:
+const yesterday = getLocalDateStr(new Date(Date.now() - 86400000));
+
+---
+
+## FIX 4 — AppContext.tsx: Fix stale closure bug in updateSettings
+
+FILE: artifacts/mobile/context/AppContext.tsx
+
+PROBLEM: updateSettings uses useCallback with [settings] as a dependency, causing stale closure issues when two updates happen quickly.
+
+FIX: Replace the updateSettings function with this version that uses functional state updates:
+
+const updateSettings = useCallback(async (updates: Partial<AppSettings>) => {
+  setSettings(prev => {
+    const newSettings = { ...prev, ...updates };
+    AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(newSettings));
+    return newSettings;
+  });
+}, []); // no dependency on settings anymore
+
+---
+
+## FIX 5 — AppContext.tsx: Add unlock window fields to AppSettings
+
+FILE: artifacts/mobile/context/AppContext.tsx
+
+PROBLEM: No lock state tracked — needed for when the native module is added.
+
+FIX 1: Add these fields to the AppSettings interface:
+  unlockWindowMinutes: number;
+  isLockActive: boolean;
+  lastUnlockedAt?: string;
+
+FIX 2: Add these to DEFAULT_SETTINGS:
+  unlockWindowMinutes: 15,
+  isLockActive: false,
+  lastUnlockedAt: undefined,
+
+FIX 3: Add deduplication guard inside recordSession. Replace the recordSession function with:
+
+const recordSession = useCallback(async (session: Omit<StretchSession, 'id' | 'completedAt'>) => {
+  const now = new Date().toISOString();
+  const oneMinAgo = new Date(Date.now() - 60000).toISOString();
+
+  const recentDupe = sessions.find(
+    s => s.stretchId === session.stretchId && s.completedAt > oneMinAgo
+  );
+  if (recentDupe) return;
+
+  const newSession: StretchSession = {
+    ...session,
+    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+    completedAt: now,
+  };
+  const newSessions = [newSession, ...sessions];
+  setSessions(newSessions);
+  await AsyncStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(newSessions));
+}, [sessions]);
+
+---
+
+## FIX 6 — stretches.ts: Add recent-stretch exclusion and duration filter to getRandomStretch
+
+FILE: artifacts/mobile/constants/stretches.ts
+
+PROBLEM: getRandomStretch picks randomly with no exclusion, so the same stretch repeats. Also ignores preferred duration.
+
+FIX: Replace the getRandomStretch function with:
+
+export function getRandomStretch(
+  areas: BodyArea[] = [],
+  excludeIds: string[] = [],
+  maxDuration?: number
+): Stretch {
+  let pool = getStretchesForAreas(areas).filter(s => !excludeIds.includes(s.id));
+  if (maxDuration) {
+    const durationFiltered = pool.filter(s => s.durationSeconds <= maxDuration);
+    if (durationFiltered.length > 0) pool = durationFiltered;
+  }
+  if (pool.length === 0) pool = getStretchesForAreas(areas); // fallback
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+---
+
+## FIX 7 — stretches.ts: Add bundleIds to DISTRACTING_APPS
+
+FILE: artifacts/mobile/constants/stretches.ts
+
+PROBLEM: DISTRACTING_APPS has no iOS bundle IDs — needed for FamilyControls.
+
+FIX: Replace the DISTRACTING_APPS array with:
+
+export const DISTRACTING_APPS = [
+  { id: 'tiktok',     name: 'TikTok',      bundleId: 'com.zhiliaoapp.musically',   icon: 'logo-tiktok',     color: '#010101' },
+  { id: 'instagram',  name: 'Instagram',   bundleId: 'com.burbn.instagram',         icon: 'logo-instagram',  color: '#E1306C' },
+  { id: 'youtube',    name: 'YouTube',     bundleId: 'com.google.ios.youtube',      icon: 'logo-youtube',    color: '#FF0000' },
+  { id: 'twitter',    name: 'X / Twitter', bundleId: 'com.atebits.Tweetie2',        icon: 'logo-twitter',    color: '#1DA1F2' },
+  { id: 'reddit',     name: 'Reddit',      bundleId: 'com.reddit.Reddit',           icon: 'logo-reddit',     color: '#FF4500' },
+  { id: 'facebook',   name: 'Facebook',    bundleId: 'com.facebook.Facebook',       icon: 'logo-facebook',   color: '#1877F2' },
+  { id: 'snapchat',   name: 'Snapchat',    bundleId: 'com.toyopagroup.picaboo',      icon: 'logo-snapchat',   color: '#FFCA00' },
+  { id: 'discord',    name: 'Discord',     bundleId: 'com.hammerandchisel.discord',  icon: 'logo-discord',    color: '#5865F2' },
+  { id: 'twitch',     name: 'Twitch',      bundleId: 'tv.twitch',                   icon: 'logo-twitch',     color: '#9146FF' },
+  { id: 'linkedin',   name: 'LinkedIn',    bundleId: 'com.linkedin.LinkedIn',       icon: 'logo-linkedin',   color: '#0A66C2' },
+  { id: 'pinterest',  name: 'Pinterest',   bundleId: 'com.pinterest',               icon: 'logo-pinterest',  color: '#E60023' },
+  { id: 'news',       name: 'News & feeds', bundleId: '',                           icon: 'newspaper-outline', color: '#34495E' },
+];
+
+---
+
+## FIX 8 — session.tsx: Add TimerRing component and display it
+
+FILE: artifacts/mobile/app/stretch/session.tsx
+
+PROBLEM: No visual progress ring around the breathing orb. Users cannot see how far through the stretch they are.
+
+FIX STEP 1: Add this import at the top of session.tsx (after existing imports):
+import Svg, { Circle } from 'react-native-svg';
+
+FIX STEP 2: Add this component definition just above the BreathingOrb component:
+
+function TimerRing({ progress }: { progress: number }) {
+  const R = 108;
+  const CIRC = 2 * Math.PI * R;
+  const animProg = useSharedValue(0);
+
+  useEffect(() => {
+    animProg.value = withTiming(progress, {
+      duration: 500,
+      easing: Easing.linear,
+    });
+  }, [progress]);
+
+  const animatedProps = useAnimatedProps(() => ({
+    strokeDashoffset: CIRC * (1 - animProg.value),
+  }));
+
+  const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+  return (
+    <Svg
+      width={240}
+      height={240}
+      style={{ position: 'absolute' }}
+    >
+      <Circle
+        cx={120} cy={120} r={R}
+        fill="none"
+        stroke={Colors.bgSurface}
+        strokeWidth={5}
+      />
+      <AnimatedCircle
+        cx={120} cy={120} r={R}
+        fill="none"
+        stroke={Colors.primary}
+        strokeWidth={5}
+        strokeLinecap="round"
+        strokeDasharray={CIRC}
+        animatedProps={animatedProps}
+        transform="rotate(-90 120 120)"
+      />
+    </Svg>
+  );
+}
+
+FIX STEP 3: Find the orbSection View in the JSX and replace it with:
+
+<View style={styles.orbSection}>
+  <View style={{ width: 240, height: 240, alignItems: 'center', justifyContent: 'center' }}>
+    {phase === 'running' && <TimerRing progress={progress} />}
+    <BreathingOrb isRunning={phase === 'running'} phase={breathPhase} />
+  </View>
+  {phase === 'running' && (
+    <Animated.Text
+      key="bigTimer"
+      entering={FadeIn.duration(300)}
+      style={styles.bigTimer}
+    >
+      {formatTime(remaining)}
+    </Animated.Text>
+  )}
+  <Animated.Text
+    key={phase === 'running' ? breathPhase : phase}
+    entering={FadeIn.duration(400)}
+    style={[
+      styles.breathLabel,
+      phase === 'done' && { color: Colors.primary, fontFamily: 'DM_Sans_700Bold' },
+    ]}
+  >
+    {phase === 'ready' ? 'Tap below to begin'
+      : phase === 'done' ? 'Well done!'
+      : BREATH_LABEL[breathPhase]}
+  </Animated.Text>
+</View>
+
+FIX STEP 4: Add this to the styles StyleSheet inside session.tsx:
+bigTimer: {
+  fontSize: 52,
+  fontFamily: 'DM_Sans_700Bold',
+  color: Colors.text,
+  letterSpacing: -2,
+  lineHeight: 56,
+  marginTop: 8,
+},
+
+NOTE: If react-native-svg is not already in package.json, run: npx expo install react-native-svg
+
+---
+
+## FIX 9 — session.tsx: Auto-advancing instruction + stretch icon in orb
+
+FILE: artifacts/mobile/app/stretch/session.tsx
+
+PROBLEM 1: Instructions are a horizontal scroll — bad UX mid-stretch. Should show one at a time.
+PROBLEM 2: The orb shows a generic body-outline icon. Each stretch has its own mciIcon that should be shown.
+
+FIX STEP 1: Add this import at the top (if not already present):
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+
+FIX STEP 2: Add this computed value just below the `remaining` and `progress` lines:
+const instrIndex = phase === 'running'
+  ? Math.min(
+      Math.floor((elapsed / duration) * stretch.instructions.length),
+      stretch.instructions.length - 1
+    )
+  : 0;
+
+FIX STEP 3: In the BreathingOrb component, add mciIcon as a prop:
+function BreathingOrb({ isRunning, phase, mciIcon }: { isRunning: boolean; phase: Breath; mciIcon: string }) {
+
+FIX STEP 4: Inside BreathingOrb, replace:
+<Ionicons name="body-outline" size={36} color={...} />
+with:
+<MaterialCommunityIcons
+  name={mciIcon as any}
+  size={44}
+  color={isRunning && phase !== 'out' ? Colors.white : Colors.textSecondary}
+/>
+
+FIX STEP 5: Update the BreathingOrb usage in the JSX to pass mciIcon:
+<BreathingOrb isRunning={phase === 'running'} phase={breathPhase} mciIcon={stretch.mciIcon} />
+
+FIX STEP 6: Replace the entire instrWrap section:
+Find this block:
+{stretch.instructions.length > 0 && phase !== 'done' && (
+  <View style={styles.instrWrap}>
+    <ScrollView horizontal ...>
+      ...
+    </ScrollView>
+  </View>
+)}
+
+Replace it with:
+{stretch.instructions.length > 0 && phase !== 'done' && (
+  <View style={styles.instrWrap}>
+    <Animated.Text
+      key={instrIndex}
+      entering={FadeIn.duration(400)}
+      style={styles.instrSingle}
+    >
+      {stretch.instructions[instrIndex]}
+    </Animated.Text>
+    <View style={styles.instrDots}>
+      {stretch.instructions.map((_, i) => (
+        <View
+          key={i}
+          style={[
+            styles.instrDot,
+            i === instrIndex && styles.instrDotActive,
+          ]}
+        />
+      ))}
+    </View>
+  </View>
+)}
+
+FIX STEP 7: Add these styles to the styles StyleSheet:
+instrSingle: {
+  fontSize: 15,
+  fontFamily: 'DM_Sans_500Medium',
+  color: Colors.textSecondary,
+  textAlign: 'center',
+  lineHeight: 22,
+  paddingHorizontal: 32,
+},
+instrDots: {
+  flexDirection: 'row',
+  justifyContent: 'center',
+  gap: 5,
+  marginTop: 10,
+},
+instrDot: {
+  width: 5,
+  height: 5,
+  borderRadius: 3,
+  backgroundColor: Colors.bgSurface,
+},
+instrDotActive: {
+  backgroundColor: Colors.primary,
+  width: 14,
+},
+
+Also remove the old instrCard, instrNumText, instrText styles since they are no longer used.
+
+---
+
+## FIX 10 — session.tsx: Fix "Done early" minimum and record actual elapsed time
+
+FILE: artifacts/mobile/app/stretch/session.tsx
+
+FIX 1: Replace handleEarlyDone with:
+const handleEarlyDone = () => {
+  if (elapsed < 10) return; // must complete at least 10 seconds
+  clearTimers();
+  setPhase('done');
+  if (Platform.OS !== 'web')
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+};
+
+FIX 2: In handleComplete, change durationSeconds to use elapsed instead of duration:
+await recordSession({
+  stretchId: stretch.id,
+  stretchName: stretch.name,
+  durationSeconds: elapsed,
+  targetApp,
+});
+
+---
+
+## FIX 11 — index.tsx (Home): Pass recentIds to getRandomStretch, wire app chips to pass targetApp
+
+FILE: artifacts/mobile/app/(tabs)/index.tsx
+
+FIX 1: Add sessions to the useApp destructure:
+const { settings, todayCount, currentStreak, totalSessions, sessions } = useApp();
+
+FIX 2: Add this line just before handleStart:
+const recentIds = sessions.slice(0, 3).map(s => s.stretchId);
+
+FIX 3: Update handleStart to pass recentIds and preferredDuration:
+const handleStart = () => {
+  const s = getRandomStretch(settings.focusBodyAreas, recentIds, settings.preferredDuration);
+  router.push({ pathname: '/stretch/session', params: { stretchId: s.id } });
+};
+
+FIX 4: In the lockedApps map where each app chip is rendered, update the onPress to pass targetApp:
+onPress={() => {
+  const s = getRandomStretch(settings.focusBodyAreas, recentIds, settings.preferredDuration);
+  router.push({
+    pathname: '/stretch/session',
+    params: { stretchId: s.id, targetApp: app.name }
+  });
+}}
+
+---
+
+## FIX 12 — progress.tsx: Fix heatmap cell sizing for small screens
+
+FILE: artifacts/mobile/app/(tabs)/progress.tsx
+
+PROBLEM: 35 cells at fixed 32px overflow on narrow screens like iPhone SE.
+
+FIX STEP 1: Add this import at the top:
+import { useWindowDimensions } from 'react-native';
+
+FIX STEP 2: Replace the MonthHeatmap component with:
+
+function MonthHeatmap({ sessions }: { sessions: StretchSession[] }) {
+  const { width } = useWindowDimensions();
+  const COLS = 7;
+  const CARD_PADDING = 36;
+  const GAP = 4;
+  const cellSize = Math.floor((width - CARD_PADDING * 2 - GAP * (COLS - 1)) / COLS);
+
+  const today = new Date();
+  const cells = Array.from({ length: 35 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (34 - i));
+    const key = d.toISOString().split('T')[0];
+    const count = sessions.filter(s => s.completedAt.startsWith(key)).length;
+    const isToday = i === 34;
+    return { count, isToday };
+  });
+
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
+      {cells.map((c, i) => (
+        <View
+          key={i}
+          style={[
+            {
+              width: cellSize,
+              height: cellSize,
+              borderRadius: Math.floor(cellSize * 0.2),
+            },
+            c.count === 0 && { backgroundColor: Colors.bgSurface },
+            c.count === 1 && { backgroundColor: 'rgba(58, 122, 92, 0.3)' },
+            c.count === 2 && { backgroundColor: 'rgba(58, 122, 92, 0.6)' },
+            c.count >= 3 && { backgroundColor: Colors.primary },
+            c.isToday && { borderWidth: 2, borderColor: Colors.accent },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+Also remove the old heatmap StyleSheet since the styles are now inline.
+
+---
+
+## FINAL STEP — Git commit and push
+
+After ALL fixes above are complete and you have confirmed each one:
+
+1. Run: cd /path/to/project && git add -A
+2. Run: git commit -m "fix: Platform import crash, app scheme, streak timezone, TimerRing, auto-advancing instructions, heatmap sizing, stretch rotation exclusion, done-early guard, session elapsed time, app chip targetApp wiring"
+3. Run: git push origin main
+
+If there are any TypeScript errors after your changes, fix them before committing. Do not commit broken code.
+
+After pushing, tell me:
+- Which fixes were applied successfully
+- If any fix had to be modified and why
+- If any TypeScript errors were found and how you resolved them
+- The final git commit hash
