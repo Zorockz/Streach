@@ -12,37 +12,36 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { useApp, StretchSession } from "@/context/AppContext";
 
-function WeekChart({ sessions }: { sessions: StretchSession[] }) {
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+function WeekBar({ sessions }: { sessions: StretchSession[] }) {
+  const days = ["S", "M", "T", "W", "T", "F", "S"];
   const today = new Date();
-  const weekData = days.map((day, i) => {
-    const date = new Date(today);
-    date.setDate(today.getDate() - (6 - i));
-    const dateStr = date.toISOString().split('T')[0];
-    const count = sessions.filter(s => s.completedAt.startsWith(dateStr)).length;
-    const isToday = i === 6;
-    return { day, count, isToday };
+  const data = days.map((day, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (6 - i));
+    const key = d.toISOString().split("T")[0];
+    const count = sessions.filter((s) => s.completedAt.startsWith(key)).length;
+    return { day, count, isToday: i === 6 };
   });
-
-  const maxCount = Math.max(...weekData.map(d => d.count), 1);
+  const max = Math.max(...data.map((d) => d.count), 1);
 
   return (
-    <View style={styles.weekChart}>
-      {weekData.map(({ day, count, isToday }, i) => {
-        const height = Math.max((count / maxCount) * 80, 4);
+    <View style={bar.container}>
+      {data.map(({ day, count, isToday }, i) => {
+        const h = Math.max((count / max) * 72, count > 0 ? 8 : 3);
         return (
-          <View key={i} style={styles.barCol}>
-            <View style={styles.barTrack}>
+          <View key={i} style={bar.col}>
+            <View style={bar.track}>
               <View
                 style={[
-                  styles.barFill,
-                  { height },
-                  count > 0 && { backgroundColor: isToday ? Colors.accentWarm : Colors.primaryLight },
+                  bar.fill,
+                  { height: h },
+                  count > 0 && {
+                    backgroundColor: isToday ? Colors.accent : Colors.primary,
+                  },
                 ]}
               />
             </View>
-            <Text style={[styles.barLabel, isToday && styles.barLabelToday]}>{day}</Text>
-            <Text style={styles.barCount}>{count > 0 ? count : ''}</Text>
+            <Text style={[bar.label, isToday && bar.labelToday]}>{day}</Text>
           </View>
         );
       })}
@@ -50,24 +49,53 @@ function WeekChart({ sessions }: { sessions: StretchSession[] }) {
   );
 }
 
-function SessionItem({ session }: { session: StretchSession }) {
-  const date = new Date(session.completedAt);
-  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+const bar = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    height: 96,
+    paddingBottom: 24,
+  },
+  col: { flex: 1, alignItems: "center", gap: 6 },
+  track: {
+    width: 24,
+    height: 72,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 6,
+    justifyContent: "flex-end",
+    overflow: "hidden",
+  },
+  fill: {
+    width: "100%",
+    backgroundColor: "rgba(93,180,131,0.25)",
+    borderRadius: 6,
+  },
+  label: {
+    fontSize: 11,
+    fontFamily: "DM_Sans_500Medium",
+    color: Colors.textMuted,
+  },
+  labelToday: { color: Colors.accent },
+});
 
+function SessionRow({ session }: { session: StretchSession }) {
+  const d = new Date(session.completedAt);
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const date = d.toLocaleDateString([], { month: "short", day: "numeric" });
   return (
-    <View style={styles.sessionItem}>
-      <View style={styles.sessionIcon}>
-        <Ionicons name="checkmark-circle" size={22} color={Colors.primaryLight} />
+    <View style={styles.sessionRow}>
+      <View style={styles.sessionDot}>
+        <Ionicons name="checkmark" size={14} color={Colors.primary} />
       </View>
-      <View style={styles.sessionInfo}>
+      <View style={styles.sessionMeta}>
         <Text style={styles.sessionName}>{session.stretchName}</Text>
         {session.targetApp && (
           <Text style={styles.sessionApp}>Unlocked {session.targetApp}</Text>
         )}
       </View>
       <View style={styles.sessionTime}>
-        <Text style={styles.sessionDate}>{dateStr}</Text>
+        <Text style={styles.sessionDate}>{date}</Text>
         <Text style={styles.sessionHour}>{time}</Text>
       </View>
     </View>
@@ -76,208 +104,266 @@ function SessionItem({ session }: { session: StretchSession }) {
 
 export default function ProgressScreen() {
   const insets = useSafeAreaInsets();
-  const { sessions, todayCount, currentStreak, totalSessions, settings } = useApp();
+  const { sessions, todayCount, currentStreak, totalSessions, settings } =
+    useApp();
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  const topPadding = Platform.OS === 'web' ? 67 : insets.top;
-  const bottomPadding = Platform.OS === 'web' ? 34 : 0;
-
-  const thisWeek = sessions.filter(s => {
-    const sessionDate = new Date(s.completedAt);
-    const weekAgo = new Date(Date.now() - 7 * 86400000);
-    return sessionDate > weekAgo;
+  const thisWeek = sessions.filter((s) => {
+    return new Date(s.completedAt) > new Date(Date.now() - 7 * 86400000);
   }).length;
 
+  const totalMinutes = Math.round(
+    sessions.reduce((a, s) => a + s.durationSeconds, 0) / 60
+  );
+
   const longestStreak = (() => {
-    if (sessions.length === 0) return 0;
-    const daySet = new Set(sessions.map(s => s.completedAt.split('T')[0]));
-    const sorted = Array.from(daySet).sort();
-    let max = 1, current = 1;
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = new Date(sorted[i - 1]);
-      const curr = new Date(sorted[i]);
-      const diff = Math.round((curr.getTime() - prev.getTime()) / 86400000);
-      if (diff === 1) { current++; max = Math.max(max, current); }
-      else current = 1;
+    if (!sessions.length) return 0;
+    const days = [...new Set(sessions.map((s) => s.completedAt.split("T")[0]))].sort();
+    let max = 1, cur = 1;
+    for (let i = 1; i < days.length; i++) {
+      const diff = Math.round(
+        (new Date(days[i]).getTime() - new Date(days[i - 1]).getTime()) / 86400000
+      );
+      cur = diff === 1 ? cur + 1 : 1;
+      max = Math.max(max, cur);
     }
     return max;
   })();
 
   return (
-    <View style={[styles.container, { paddingTop: topPadding, paddingBottom: bottomPadding }]}>
+    <View style={[styles.container, { paddingTop: topPad }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <Animated.View entering={FadeInDown.duration(500)}>
+        <Animated.View entering={FadeInDown.duration(400)}>
           <View style={styles.header}>
             <Text style={styles.title}>Progress</Text>
-            <Text style={styles.subtitle}>Your wellness journey</Text>
+            <Text style={styles.sub}>Your wellness journey</Text>
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.duration(500).delay(100)}>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>This Week</Text>
-            <WeekChart sessions={sessions} />
+        {/* Week chart */}
+        <Animated.View entering={FadeInDown.duration(400).delay(60)}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>This Week</Text>
+            <WeekBar sessions={sessions} />
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.duration(500).delay(200)}>
-          <View style={styles.statsGrid}>
-            <View style={styles.bigStat}>
-              <Text style={styles.bigStatNum}>{currentStreak}</Text>
-              <Text style={styles.bigStatLabel}>Current Streak</Text>
-              <Ionicons name="flame" size={20} color={Colors.accentWarm} style={styles.bigStatIcon} />
+        {/* Big stats */}
+        <Animated.View
+          entering={FadeInDown.duration(400).delay(120)}
+          style={styles.bigRow}
+        >
+          <View style={[styles.bigCard, { backgroundColor: Colors.accentMuted }]}>
+            <Ionicons name="flame" size={18} color={Colors.accent} />
+            <Text style={[styles.bigNum, { color: Colors.accent }]}>
+              {currentStreak}
+            </Text>
+            <Text style={styles.bigLabel}>Day streak</Text>
+          </View>
+          <View style={styles.miniCol}>
+            <View style={[styles.miniCard, { marginBottom: 9 }]}>
+              <Text style={styles.miniNum}>{longestStreak}</Text>
+              <Text style={styles.miniLabel}>Best streak</Text>
             </View>
-            <View style={styles.statsCol}>
-              <View style={[styles.miniStat, { marginBottom: 8 }]}>
-                <Text style={styles.miniStatNum}>{longestStreak}</Text>
-                <Text style={styles.miniStatLabel}>Best streak</Text>
-              </View>
-              <View style={styles.miniStat}>
-                <Text style={styles.miniStatNum}>{thisWeek}</Text>
-                <Text style={styles.miniStatLabel}>This week</Text>
-              </View>
-            </View>
-          </View>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.duration(500).delay(300)}>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>All-Time Stats</Text>
-            <View style={styles.allTimeRow}>
-              <View style={styles.allTimeStat}>
-                <Ionicons name="checkmark-done-outline" size={20} color={Colors.primaryLight} />
-                <Text style={styles.allTimeNum}>{totalSessions}</Text>
-                <Text style={styles.allTimeLabel}>Stretches</Text>
-              </View>
-              <View style={styles.allTimeDivider} />
-              <View style={styles.allTimeStat}>
-                <Ionicons name="time-outline" size={20} color={Colors.primaryLight} />
-                <Text style={styles.allTimeNum}>
-                  {Math.round(sessions.reduce((acc, s) => acc + s.durationSeconds, 0) / 60)}
-                </Text>
-                <Text style={styles.allTimeLabel}>Minutes</Text>
-              </View>
-              <View style={styles.allTimeDivider} />
-              <View style={styles.allTimeStat}>
-                <Ionicons name="calendar-outline" size={20} color={Colors.primaryLight} />
-                <Text style={styles.allTimeNum}>{todayCount}</Text>
-                <Text style={styles.allTimeLabel}>Today</Text>
-              </View>
+            <View style={styles.miniCard}>
+              <Text style={styles.miniNum}>{thisWeek}</Text>
+              <Text style={styles.miniLabel}>This week</Text>
             </View>
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.duration(500).delay(400)}>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Recent Sessions</Text>
+        {/* All time */}
+        <Animated.View entering={FadeInDown.duration(400).delay(180)}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>All Time</Text>
+            <View style={styles.allRow}>
+              <View style={styles.allStat}>
+                <Ionicons
+                  name="checkmark-done-outline"
+                  size={18}
+                  color={Colors.primary}
+                />
+                <Text style={styles.allNum}>{totalSessions}</Text>
+                <Text style={styles.allLabel}>Stretches</Text>
+              </View>
+              <View style={styles.vDivider} />
+              <View style={styles.allStat}>
+                <Ionicons name="time-outline" size={18} color={Colors.primary} />
+                <Text style={styles.allNum}>{totalMinutes}</Text>
+                <Text style={styles.allLabel}>Minutes</Text>
+              </View>
+              <View style={styles.vDivider} />
+              <View style={styles.allStat}>
+                <Ionicons
+                  name="today-outline"
+                  size={18}
+                  color={Colors.primary}
+                />
+                <Text style={styles.allNum}>{todayCount}</Text>
+                <Text style={styles.allLabel}>Today</Text>
+              </View>
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* Sessions */}
+        <Animated.View entering={FadeInDown.duration(400).delay(240)}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Recent Sessions</Text>
             {sessions.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Ionicons name="body-outline" size={40} color={Colors.textMuted} />
-                <Text style={styles.emptyText}>No stretches yet</Text>
-                <Text style={styles.emptySubtext}>Complete your first stretch to see it here</Text>
+              <View style={styles.empty}>
+                <Ionicons name="body-outline" size={36} color={Colors.textMuted} />
+                <Text style={styles.emptyText}>No sessions yet</Text>
+                <Text style={styles.emptySub}>
+                  Complete your first stretch to see it here
+                </Text>
               </View>
             ) : (
-              <View style={styles.sessionList}>
-                {sessions.slice(0, 15).map(session => (
-                  <SessionItem key={session.id} session={session} />
+              <View style={{ gap: 2 }}>
+                {sessions.slice(0, 20).map((s) => (
+                  <SessionRow key={s.id} session={s} />
                 ))}
               </View>
             )}
           </View>
         </Animated.View>
-        <View style={{ height: 120 }} />
+
+        <View style={{ height: 110 }} />
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: { paddingHorizontal: 20, paddingTop: 12, marginBottom: 20 },
-  title: { fontSize: 28, fontFamily: 'Inter_700Bold', color: Colors.text, marginBottom: 2 },
-  subtitle: { fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.textMuted },
-  section: {
+  container: { flex: 1, backgroundColor: Colors.bg },
+  header: { paddingHorizontal: 20, paddingTop: 8, marginBottom: 16 },
+  title: {
+    fontSize: 26,
+    fontFamily: "DM_Sans_700Bold",
+    color: Colors.text,
+    letterSpacing: -0.3,
+    marginBottom: 2,
+  },
+  sub: { fontSize: 13, fontFamily: "DM_Sans_400Regular", color: Colors.textMuted },
+  card: {
     marginHorizontal: 20,
-    backgroundColor: Colors.surface,
-    borderRadius: 20,
+    backgroundColor: Colors.bgCard,
+    borderRadius: 18,
     padding: 18,
     marginBottom: 12,
   },
-  sectionTitle: {
-    fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
+  cardTitle: {
+    fontSize: 14,
+    fontFamily: "DM_Sans_600SemiBold",
     color: Colors.text,
     marginBottom: 14,
   },
-  weekChart: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    height: 120,
-  },
-  barCol: { flex: 1, alignItems: 'center', gap: 4 },
-  barTrack: {
-    width: 28,
-    height: 80,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 8,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-  },
-  barFill: {
-    width: '100%',
-    backgroundColor: 'rgba(122, 184, 147, 0.3)',
-    borderRadius: 8,
-  },
-  barLabel: { fontSize: 10, fontFamily: 'Inter_500Medium', color: Colors.textMuted },
-  barLabelToday: { color: Colors.accentWarm },
-  barCount: { fontSize: 10, fontFamily: 'Inter_600SemiBold', color: Colors.textMuted, minHeight: 14 },
-  statsGrid: {
-    flexDirection: 'row',
-    marginHorizontal: 20,
-    gap: 12,
-    marginBottom: 12,
-  },
-  bigStat: {
+  bigRow: { flexDirection: "row", marginHorizontal: 20, gap: 10, marginBottom: 12 },
+  bigCard: {
     flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 20,
-    padding: 18,
-    position: 'relative',
+    backgroundColor: Colors.bgCard,
+    borderRadius: 18,
+    padding: 16,
+    alignItems: "flex-start",
+    gap: 4,
   },
-  bigStatNum: { fontSize: 48, fontFamily: 'Inter_700Bold', color: Colors.text },
-  bigStatLabel: { fontSize: 12, fontFamily: 'Inter_500Medium', color: Colors.textMuted, marginTop: 2 },
-  bigStatIcon: { position: 'absolute', top: 16, right: 16 },
-  statsCol: { flex: 1, gap: 8 },
-  miniStat: {
+  bigNum: {
+    fontSize: 44,
+    fontFamily: "DM_Sans_700Bold",
+    color: Colors.text,
+    lineHeight: 50,
+  },
+  bigLabel: {
+    fontSize: 12,
+    fontFamily: "DM_Sans_500Medium",
+    color: Colors.textMuted,
+  },
+  miniCol: { flex: 1 },
+  miniCard: {
     flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
+    backgroundColor: Colors.bgCard,
+    borderRadius: 14,
     padding: 14,
   },
-  miniStatNum: { fontSize: 26, fontFamily: 'Inter_700Bold', color: Colors.text },
-  miniStatLabel: { fontSize: 11, fontFamily: 'Inter_500Medium', color: Colors.textMuted },
-  allTimeRow: { flexDirection: 'row', justifyContent: 'space-around' },
-  allTimeStat: { alignItems: 'center', gap: 6 },
-  allTimeDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.08)', alignSelf: 'stretch' },
-  allTimeNum: { fontSize: 24, fontFamily: 'Inter_700Bold', color: Colors.text },
-  allTimeLabel: { fontSize: 11, fontFamily: 'Inter_500Medium', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  emptyState: { alignItems: 'center', paddingVertical: 24, gap: 8 },
-  emptyText: { fontSize: 15, fontFamily: 'Inter_500Medium', color: Colors.textSecondary },
-  emptySubtext: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.textMuted, textAlign: 'center' },
-  sessionList: { gap: 2 },
-  sessionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  miniNum: {
+    fontSize: 26,
+    fontFamily: "DM_Sans_700Bold",
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  miniLabel: {
+    fontSize: 11,
+    fontFamily: "DM_Sans_500Medium",
+    color: Colors.textMuted,
+  },
+  allRow: { flexDirection: "row", justifyContent: "space-around" },
+  allStat: { alignItems: "center", gap: 6, flex: 1 },
+  vDivider: {
+    width: 1,
+    backgroundColor: Colors.divider,
+    alignSelf: "stretch",
+  },
+  allNum: {
+    fontSize: 22,
+    fontFamily: "DM_Sans_700Bold",
+    color: Colors.text,
+  },
+  allLabel: {
+    fontSize: 11,
+    fontFamily: "DM_Sans_500Medium",
+    color: Colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  empty: { alignItems: "center", paddingVertical: 20, gap: 8 },
+  emptyText: {
+    fontSize: 15,
+    fontFamily: "DM_Sans_500Medium",
+    color: Colors.textSecondary,
+  },
+  emptySub: {
+    fontSize: 13,
+    fontFamily: "DM_Sans_400Regular",
+    color: Colors.textMuted,
+    textAlign: "center",
+  },
+  sessionRow: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 10,
     gap: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+    borderBottomColor: Colors.divider,
   },
-  sessionIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(122,184,147,0.12)', alignItems: 'center', justifyContent: 'center' },
-  sessionInfo: { flex: 1 },
-  sessionName: { fontSize: 14, fontFamily: 'Inter_500Medium', color: Colors.text, marginBottom: 2 },
-  sessionApp: { fontSize: 11, fontFamily: 'Inter_400Regular', color: Colors.textMuted },
-  sessionTime: { alignItems: 'flex-end' },
-  sessionDate: { fontSize: 11, fontFamily: 'Inter_500Medium', color: Colors.textMuted },
-  sessionHour: { fontSize: 11, fontFamily: 'Inter_400Regular', color: Colors.textMuted },
+  sessionDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryMuted,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sessionMeta: { flex: 1 },
+  sessionName: {
+    fontSize: 14,
+    fontFamily: "DM_Sans_500Medium",
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  sessionApp: {
+    fontSize: 11,
+    fontFamily: "DM_Sans_400Regular",
+    color: Colors.textMuted,
+  },
+  sessionTime: { alignItems: "flex-end" },
+  sessionDate: {
+    fontSize: 11,
+    fontFamily: "DM_Sans_500Medium",
+    color: Colors.textMuted,
+  },
+  sessionHour: {
+    fontSize: 11,
+    fontFamily: "DM_Sans_400Regular",
+    color: Colors.textMuted,
+  },
 });

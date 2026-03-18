@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
@@ -15,213 +16,314 @@ import Animated, {
   FadeIn,
   FadeInDown,
   FadeInUp,
-  FadeOut,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-  interpolate,
-  Extrapolate,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { BODY_AREAS, DISTRACTING_APPS, BodyArea } from "@/constants/stretches";
 import { useApp } from "@/context/AppContext";
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: W } = Dimensions.get("window");
 
-interface OnboardingSlide {
-  id: string;
-  title: string;
-  subtitle: string;
-  icon: string;
-  color: string;
+type Step =
+  | "welcome"
+  | "how"
+  | "apps"
+  | "areas"
+  | "notifications"
+  | "ready";
+
+const INFO_STEPS: Step[] = ["welcome", "how"];
+
+function NextBtn({
+  label,
+  onPress,
+  icon = "arrow-forward",
+}: {
+  label: string;
+  onPress: () => void;
+  icon?: string;
+}) {
+  return (
+    <Pressable style={styles.nextBtn} onPress={onPress}>
+      <Text style={styles.nextBtnText}>{label}</Text>
+      <Ionicons name={icon as any} size={18} color={Colors.textInverted} />
+    </Pressable>
+  );
 }
 
-const SLIDES: OnboardingSlide[] = [
-  {
-    id: 'welcome',
-    title: 'Move Before\nYou Scroll',
-    subtitle: 'StretchGate helps you build healthy habits by adding a quick stretch before opening distracting apps.',
-    icon: 'body-outline',
-    color: Colors.primaryLight,
-  },
-  {
-    id: 'how',
-    title: 'How It Works',
-    subtitle: 'You choose which apps to lock. Before you can open them, you complete a 20–60 second guided stretch. Then the app is yours.',
-    icon: 'lock-open-outline',
-    color: Colors.accentWarm,
-  },
-  {
-    id: 'wellness',
-    title: 'Feel the\nDifference',
-    subtitle: 'Even 30 seconds of stretching relieves tension, resets your posture, and gives your eyes a break. Small habits, big impact.',
-    icon: 'heart-outline',
-    color: Colors.softMint,
-  },
-];
-
-function WelcomeSlide() {
+function SkipBtn({ onPress }: { onPress: () => void }) {
   return (
-    <View style={styles.slide}>
-      <Animated.View entering={FadeIn.duration(600)} style={styles.heroIcon}>
-        <Ionicons name="body-outline" size={80} color={Colors.primaryLight} />
+    <Pressable style={styles.skipBtn} onPress={onPress}>
+      <Text style={styles.skipBtnText}>Skip</Text>
+    </Pressable>
+  );
+}
+
+function WelcomeStep({ onNext }: { onNext: () => void }) {
+  return (
+    <View style={styles.step}>
+      <Animated.View entering={FadeIn.duration(700)} style={styles.heroBox}>
+        <Ionicons name="body-outline" size={64} color={Colors.primary} />
       </Animated.View>
-      <Animated.Text entering={FadeInDown.duration(600).delay(200)} style={styles.heroTitle}>
-        Move Before{'\n'}You Scroll
+      <Animated.Text entering={FadeInDown.duration(600).delay(200)} style={styles.h1}>
+        Move Before{"\n"}You Scroll
       </Animated.Text>
-      <Animated.Text entering={FadeInDown.duration(600).delay(350)} style={styles.heroSub}>
-        StretchGate helps you build healthy habits by adding a quick stretch before opening distracting apps.
+      <Animated.Text entering={FadeInDown.duration(600).delay(350)} style={styles.body}>
+        StretchGate adds a tiny wellness gate before your most distracting apps.
+        30 seconds of movement, then you're in.
       </Animated.Text>
+      <Animated.View entering={FadeInUp.duration(500).delay(500)} style={styles.stepFooter}>
+        <NextBtn label="Get started" onPress={onNext} />
+      </Animated.View>
     </View>
   );
 }
 
-function HowItWorksSlide() {
+function HowStep({ onNext }: { onNext: () => void }) {
   const steps = [
-    { icon: 'phone-portrait-outline', label: 'Choose apps to lock', color: Colors.accentWarm },
-    { icon: 'timer-outline', label: 'Complete a 20–60s stretch', color: Colors.primaryLight },
-    { icon: 'checkmark-circle-outline', label: 'App unlocks — enjoy!', color: Colors.softMint },
+    {
+      icon: "lock-closed-outline",
+      color: Colors.accent,
+      title: "Pick your apps",
+      sub: "Choose which apps require a stretch",
+    },
+    {
+      icon: "timer-outline",
+      color: Colors.primary,
+      title: "Complete a stretch",
+      sub: "20–60 seconds, guided by the app",
+    },
+    {
+      icon: "checkmark-circle-outline",
+      color: Colors.primaryLight,
+      title: "Open the app",
+      sub: "Honor system — no Screen Time API needed",
+    },
   ];
+
   return (
-    <View style={styles.slide}>
-      <Animated.Text entering={FadeInDown.duration(500)} style={styles.heroTitle}>
-        How It Works
+    <View style={styles.step}>
+      <Animated.Text entering={FadeInDown.duration(500)} style={styles.h1}>
+        Here's how{"\n"}it works
       </Animated.Text>
-      <View style={styles.stepsList}>
-        {steps.map((step, i) => (
+      <View style={styles.stepList}>
+        {steps.map((s, i) => (
           <Animated.View
-            key={step.label}
-            entering={FadeInDown.duration(500).delay(i * 120)}
-            style={styles.step}
+            key={s.title}
+            entering={FadeInDown.duration(500).delay(i * 100 + 100)}
+            style={styles.stepCard}
           >
-            <View style={[styles.stepIcon, { backgroundColor: step.color + '20' }]}>
-              <Ionicons name={step.icon as any} size={24} color={step.color} />
+            <View
+              style={[styles.stepCardIcon, { backgroundColor: s.color + "20" }]}
+            >
+              <Ionicons name={s.icon as any} size={22} color={s.color} />
             </View>
-            <Text style={styles.stepLabel}>{step.label}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.stepCardTitle}>{s.title}</Text>
+              <Text style={styles.stepCardSub}>{s.sub}</Text>
+            </View>
           </Animated.View>
         ))}
       </View>
-      <Animated.Text entering={FadeInDown.duration(500).delay(400)} style={styles.heroSub}>
-        No Screen Time API needed. You complete the stretch manually — it's the honor system. And it works.
-      </Animated.Text>
-    </View>
-  );
-}
-
-function WellnessSlide() {
-  return (
-    <View style={styles.slide}>
-      <Animated.View entering={FadeIn.duration(600)} style={styles.heroIcon}>
-        <Ionicons name="heart-outline" size={80} color={Colors.softMint} />
+      <Animated.View entering={FadeInUp.duration(500).delay(500)} style={styles.stepFooter}>
+        <NextBtn label="Choose my apps" onPress={onNext} />
       </Animated.View>
-      <Animated.Text entering={FadeInDown.duration(600).delay(200)} style={styles.heroTitle}>
-        Feel the{'\n'}Difference
-      </Animated.Text>
-      <Animated.Text entering={FadeInDown.duration(600).delay(350)} style={styles.heroSub}>
-        Even 30 seconds of stretching relieves tension, resets your posture, and gives your eyes a break. Small habits, big impact.
-      </Animated.Text>
     </View>
   );
 }
 
-function AppSelectionStep({ onDone }: { onDone: (apps: string[]) => void }) {
+function AppsStep({
+  onNext,
+}: {
+  onNext: (apps: string[]) => void;
+}) {
   const [selected, setSelected] = useState<string[]>([]);
 
   const toggle = async (id: string) => {
-    if (Platform.OS !== 'web') await Haptics.selectionAsync();
-    setSelected(s => s.includes(id) ? s.filter(a => a !== id) : [...s, id]);
+    if (Platform.OS !== "web") await Haptics.selectionAsync();
+    setSelected((s) =>
+      s.includes(id) ? s.filter((a) => a !== id) : [...s, id]
+    );
   };
 
   return (
-    <View style={styles.slide}>
-      <Animated.Text entering={FadeInDown.duration(500)} style={styles.heroTitle}>
-        Which Apps{'\n'}Distract You?
+    <View style={styles.step}>
+      <Animated.Text entering={FadeInDown.duration(500)} style={styles.h1}>
+        Which apps{"\n"}distract you most?
       </Animated.Text>
-      <Animated.Text entering={FadeInDown.duration(500).delay(100)} style={styles.heroSub}>
-        Select the apps you want to use mindfully. You can change this anytime.
+      <Animated.Text
+        entering={FadeInDown.duration(500).delay(100)}
+        style={styles.body}
+      >
+        You'll stretch before opening these. You can change this anytime in Settings.
       </Animated.Text>
-      <Animated.View entering={FadeInDown.duration(500).delay(200)} style={styles.appGrid}>
-        {DISTRACTING_APPS.map(app => {
-          const isSelected = selected.includes(app.id);
+      <Animated.View
+        entering={FadeInDown.duration(500).delay(200)}
+        style={styles.appGrid}
+      >
+        {DISTRACTING_APPS.map((app) => {
+          const on = selected.includes(app.id);
           return (
             <Pressable
               key={app.id}
-              style={[styles.appChip, isSelected && styles.appChipSelected]}
+              style={[styles.appChip, on && styles.appChipOn]}
               onPress={() => toggle(app.id)}
             >
               <Ionicons
                 name={app.icon as any}
-                size={18}
-                color={isSelected ? Colors.primaryDeep : Colors.textSecondary}
+                size={16}
+                color={on ? Colors.textInverted : Colors.textSecondary}
               />
-              <Text style={[styles.appChipText, isSelected && styles.appChipTextSelected]}>
+              <Text style={[styles.appChipText, on && styles.appChipTextOn]}>
                 {app.name}
               </Text>
             </Pressable>
           );
         })}
       </Animated.View>
-      <Animated.View entering={FadeInUp.duration(500).delay(300)}>
-        <Pressable style={styles.nextBtn} onPress={() => onDone(selected)}>
-          <Text style={styles.nextBtnText}>
-            {selected.length === 0 ? 'Skip for now' : `Lock ${selected.length} App${selected.length > 1 ? 's' : ''}`}
-          </Text>
-          <Ionicons name="arrow-forward" size={18} color={Colors.primaryDeep} />
-        </Pressable>
+      <Animated.View entering={FadeInUp.duration(500).delay(300)} style={styles.stepFooter}>
+        <NextBtn
+          label={
+            selected.length === 0
+              ? "Skip for now"
+              : `Lock ${selected.length} app${selected.length > 1 ? "s" : ""}`
+          }
+          onPress={() => onNext(selected)}
+        />
       </Animated.View>
     </View>
   );
 }
 
-function BodyAreaStep({ onDone }: { onDone: (areas: BodyArea[]) => void }) {
+function AreasStep({
+  onNext,
+}: {
+  onNext: (areas: BodyArea[]) => void;
+}) {
   const [selected, setSelected] = useState<BodyArea[]>([]);
 
   const toggle = async (id: BodyArea) => {
-    if (Platform.OS !== 'web') await Haptics.selectionAsync();
-    setSelected(s => s.includes(id) ? s.filter(a => a !== id) : [...s, id]);
+    if (Platform.OS !== "web") await Haptics.selectionAsync();
+    setSelected((s) =>
+      s.includes(id) ? s.filter((a) => a !== id) : [...s, id]
+    );
   };
 
   return (
-    <View style={styles.slide}>
-      <Animated.Text entering={FadeInDown.duration(500)} style={styles.heroTitle}>
-        Where Do You{'\n'}Hold Tension?
+    <View style={styles.step}>
+      <Animated.Text entering={FadeInDown.duration(500)} style={styles.h1}>
+        Where do you{"\n"}hold tension?
       </Animated.Text>
-      <Animated.Text entering={FadeInDown.duration(500).delay(100)} style={styles.heroSub}>
-        We'll personalize stretches to your needs. Skip to get a mix of everything.
+      <Animated.Text
+        entering={FadeInDown.duration(500).delay(100)}
+        style={styles.body}
+      >
+        We'll serve stretches tailored to you. Skip for a balanced mix.
       </Animated.Text>
-      <Animated.View entering={FadeInDown.duration(500).delay(200)} style={styles.areaGrid}>
-        {BODY_AREAS.map(area => {
-          const isSelected = selected.includes(area.id);
+      <Animated.View
+        entering={FadeInDown.duration(500).delay(200)}
+        style={styles.areaGrid}
+      >
+        {BODY_AREAS.map((area) => {
+          const on = selected.includes(area.id);
           return (
             <Pressable
               key={area.id}
-              style={[styles.areaCard, isSelected && styles.areaCardSelected]}
+              style={[styles.areaCard, on && styles.areaCardOn]}
               onPress={() => toggle(area.id)}
             >
               <Ionicons
                 name={area.icon as any}
-                size={26}
-                color={isSelected ? Colors.primaryDeep : Colors.textSecondary}
+                size={24}
+                color={on ? Colors.textInverted : Colors.textSecondary}
               />
-              <Text style={[styles.areaCardLabel, isSelected && styles.areaCardLabelSelected]}>
+              <Text style={[styles.areaLabel, on && styles.areaLabelOn]}>
                 {area.label}
               </Text>
-              <Text style={[styles.areaCardDesc, isSelected && { color: Colors.primaryDeep + 'aa' }]}>
+              <Text style={[styles.areaSub, on && { color: "rgba(13,31,26,0.6)" }]}>
                 {area.description}
               </Text>
             </Pressable>
           );
         })}
       </Animated.View>
-      <Animated.View entering={FadeInUp.duration(500).delay(300)}>
-        <Pressable style={styles.nextBtn} onPress={() => onDone(selected)}>
-          <Text style={styles.nextBtnText}>
-            {selected.length === 0 ? 'Give me variety' : `Focus on ${selected.length} area${selected.length > 1 ? 's' : ''}`}
-          </Text>
-          <Ionicons name="arrow-forward" size={18} color={Colors.primaryDeep} />
-        </Pressable>
+      <Animated.View entering={FadeInUp.duration(500).delay(300)} style={styles.stepFooter}>
+        <NextBtn
+          label={
+            selected.length === 0
+              ? "Give me variety"
+              : `Focus on ${selected.length} area${selected.length > 1 ? "s" : ""}`
+          }
+          onPress={() => onNext(selected)}
+        />
+      </Animated.View>
+    </View>
+  );
+}
+
+function NotificationsStep({
+  onNext,
+  onSkip,
+}: {
+  onNext: () => void;
+  onSkip: () => void;
+}) {
+  const [requesting, setRequesting] = useState(false);
+
+  const handleAllow = async () => {
+    setRequesting(true);
+    try {
+      if (Platform.OS !== "web") {
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status === "granted") {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: "Time to stretch",
+              body: "Take 30 seconds to reset your body",
+              sound: true,
+            },
+            trigger: {
+              type: Notifications.SchedulableTriggerInputTypes.DAILY,
+              hour: 10,
+              minute: 0,
+              repeats: true,
+            },
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Notification error", e);
+    }
+    setRequesting(false);
+    onNext();
+  };
+
+  return (
+    <View style={styles.step}>
+      <Animated.View entering={FadeIn.duration(600)} style={styles.heroBox}>
+        <Ionicons name="notifications-outline" size={60} color={Colors.accent} />
+      </Animated.View>
+      <Animated.Text entering={FadeInDown.duration(500).delay(150)} style={styles.h1}>
+        Daily stretch{"\n"}reminders
+      </Animated.Text>
+      <Animated.Text
+        entering={FadeInDown.duration(500).delay(300)}
+        style={styles.body}
+      >
+        We'll send a gentle nudge each morning to help you build a consistent
+        habit. No spam, just one daily reminder.
+      </Animated.Text>
+      <Animated.View entering={FadeInDown.duration(500).delay(450)} style={styles.permRow}>
+        <Ionicons name="shield-checkmark-outline" size={18} color={Colors.primary} />
+        <Text style={styles.permNote}>One notification per day. Turn off anytime.</Text>
+      </Animated.View>
+      <Animated.View entering={FadeInUp.duration(500).delay(550)} style={styles.stepFooter}>
+        <NextBtn
+          label={requesting ? "Setting up..." : "Allow notifications"}
+          onPress={handleAllow}
+          icon="notifications-outline"
+        />
+        <SkipBtn onPress={onSkip} />
       </Animated.View>
     </View>
   );
@@ -229,20 +331,24 @@ function BodyAreaStep({ onDone }: { onDone: (areas: BodyArea[]) => void }) {
 
 function ReadyStep({ onDone }: { onDone: () => void }) {
   return (
-    <View style={styles.slide}>
-      <Animated.View entering={FadeIn.duration(700)} style={styles.heroIcon}>
-        <Ionicons name="checkmark-circle" size={80} color={Colors.softMint} />
+    <View style={styles.step}>
+      <Animated.View entering={FadeIn.duration(700)} style={[styles.heroBox, { backgroundColor: Colors.primaryMuted }]}>
+        <Ionicons name="checkmark-circle" size={64} color={Colors.primary} />
       </Animated.View>
-      <Animated.Text entering={FadeInDown.duration(600).delay(200)} style={styles.heroTitle}>
-        You're All Set!
+      <Animated.Text entering={FadeInDown.duration(600).delay(200)} style={styles.h1}>
+        You're all set!
       </Animated.Text>
-      <Animated.Text entering={FadeInDown.duration(600).delay(350)} style={styles.heroSub}>
-        Every time you reach for a distracting app, remember: one short stretch first. Your body will thank you.
+      <Animated.Text
+        entering={FadeInDown.duration(600).delay(350)}
+        style={styles.body}
+      >
+        Every time you reach for a distracting app, take one breath, do your
+        stretch, and then enjoy your scroll. Your body will thank you.
       </Animated.Text>
-      <Animated.View entering={FadeInUp.duration(600).delay(500)}>
-        <Pressable style={styles.startBtn} onPress={onDone}>
-          <Text style={styles.startBtnText}>Start StretchGate</Text>
-          <Ionicons name="arrow-forward-circle" size={22} color={Colors.primaryDeep} />
+      <Animated.View entering={FadeInUp.duration(600).delay(500)} style={styles.stepFooter}>
+        <Pressable style={styles.launchBtn} onPress={onDone}>
+          <Text style={styles.launchBtnText}>Start StretchGate</Text>
+          <Ionicons name="arrow-forward-circle" size={22} color={Colors.textInverted} />
         </Pressable>
       </Animated.View>
     </View>
@@ -252,270 +358,270 @@ function ReadyStep({ onDone }: { onDone: () => void }) {
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { updateSettings } = useApp();
-  const [step, setStep] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const [step, setStep] = useState<Step>("welcome");
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const topPadding = Platform.OS === 'web' ? 67 : insets.top;
-  const bottomPadding = Platform.OS === 'web' ? 34 : insets.bottom;
+  const allSteps: Step[] = ["welcome", "how", "apps", "areas", "notifications", "ready"];
+  const stepIdx = allSteps.indexOf(step);
+  const progress = (stepIdx + 1) / allSteps.length;
 
-  const totalInfoSlides = SLIDES.length;
-  const appStep = totalInfoSlides;
-  const bodyStep = totalInfoSlides + 1;
-  const readyStep = totalInfoSlides + 2;
-
-  const goToStep = async (s: number) => {
-    if (Platform.OS !== 'web') await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setStep(s);
+  const go = async (next: Step) => {
+    if (Platform.OS !== "web") await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setStep(next);
   };
 
-  const handleInfoNext = () => {
-    if (step < totalInfoSlides - 1) {
-      goToStep(step + 1);
-    } else {
-      goToStep(appStep);
-    }
-  };
-
-  const handleAppsDone = async (apps: string[]) => {
-    await updateSettings({ lockedApps: apps });
-    goToStep(bodyStep);
-  };
-
-  const handleAreasDone = async (areas: BodyArea[]) => {
-    await updateSettings({ focusBodyAreas: areas });
-    goToStep(readyStep);
-  };
-
-  const handleFinish = async () => {
+  const finish = async () => {
     await updateSettings({ hasCompletedOnboarding: true });
-    router.replace('/(tabs)');
+    router.replace("/(tabs)");
   };
-
-  const renderContent = () => {
-    if (step < totalInfoSlides) {
-      const slide = SLIDES[step];
-      if (step === 0) return <WelcomeSlide />;
-      if (step === 1) return <HowItWorksSlide />;
-      return <WellnessSlide />;
-    }
-    if (step === appStep) return <AppSelectionStep onDone={handleAppsDone} />;
-    if (step === bodyStep) return <BodyAreaStep onDone={handleAreasDone} />;
-    return <ReadyStep onDone={handleFinish} />;
-  };
-
-  const isInfoSlide = step < totalInfoSlides;
-  const totalDots = totalInfoSlides;
-  const progress = step / (readyStep);
 
   return (
-    <View style={[styles.container, { paddingTop: topPadding, paddingBottom: bottomPadding }]}>
-      <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: `${progress * 100}%` as any }]} />
+    <View style={[styles.container, { paddingTop: topPad, paddingBottom: botPad }]}>
+      {/* Progress bar */}
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
       </View>
+
+      {/* Back button (not on first step) */}
+      {stepIdx > 0 && (
+        <Pressable
+          style={styles.backBtn}
+          onPress={() => setStep(allSteps[stepIdx - 1])}
+        >
+          <Ionicons name="arrow-back" size={20} color={Colors.textSecondary} />
+        </Pressable>
+      )}
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        {renderContent()}
+        {step === "welcome" && (
+          <WelcomeStep onNext={() => go("how")} />
+        )}
+        {step === "how" && (
+          <HowStep onNext={() => go("apps")} />
+        )}
+        {step === "apps" && (
+          <AppsStep
+            onNext={async (apps) => {
+              await updateSettings({ lockedApps: apps });
+              go("areas");
+            }}
+          />
+        )}
+        {step === "areas" && (
+          <AreasStep
+            onNext={async (areas) => {
+              await updateSettings({ focusBodyAreas: areas });
+              go("notifications");
+            }}
+          />
+        )}
+        {step === "notifications" && (
+          <NotificationsStep
+            onNext={() => go("ready")}
+            onSkip={() => go("ready")}
+          />
+        )}
+        {step === "ready" && <ReadyStep onDone={finish} />}
       </ScrollView>
-
-      {isInfoSlide && (
-        <Animated.View entering={FadeInUp.duration(400)} style={styles.bottomNav}>
-          <View style={styles.dots}>
-            {SLIDES.map((_, i) => (
-              <View
-                key={i}
-                style={[styles.dot, i === step && styles.dotActive]}
-              />
-            ))}
-          </View>
-          <Pressable style={styles.nextBtnSmall} onPress={handleInfoNext}>
-            <Text style={styles.nextBtnSmallText}>
-              {step === totalInfoSlides - 1 ? 'Get Started' : 'Next'}
-            </Text>
-            <Ionicons name="arrow-forward" size={16} color={Colors.primaryDeep} />
-          </Pressable>
-        </Animated.View>
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  progressBar: {
+  container: { flex: 1, backgroundColor: Colors.bg },
+  progressTrack: {
     height: 2,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    marginHorizontal: 0,
+    backgroundColor: "rgba(255,255,255,0.07)",
   },
   progressFill: {
-    height: '100%',
-    backgroundColor: Colors.primaryLight,
-    borderRadius: 1,
+    height: "100%",
+    backgroundColor: Colors.primary,
   },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
+  backBtn: {
+    position: "absolute",
+    top: 12,
+    left: 16,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.bgCard,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  slide: {
+  scrollContent: { flexGrow: 1 },
+  step: {
+    flex: 1,
     paddingHorizontal: 28,
-    paddingVertical: 32,
-    minHeight: 500,
-    justifyContent: 'center',
+    paddingTop: 40,
+    paddingBottom: 20,
+    minHeight: 560,
+    justifyContent: "flex-start",
   },
-  heroIcon: {
-    alignSelf: 'center',
-    width: 130,
-    height: 130,
-    borderRadius: 36,
-    backgroundColor: 'rgba(122, 184, 147, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 36,
-  },
-  heroTitle: {
-    fontSize: 36,
-    fontFamily: 'Inter_700Bold',
-    color: Colors.text,
-    lineHeight: 44,
-    marginBottom: 16,
-  },
-  heroSub: {
-    fontSize: 16,
-    fontFamily: 'Inter_400Regular',
-    color: Colors.textSecondary,
-    lineHeight: 24,
+  heroBox: {
+    alignSelf: "center",
+    width: 120,
+    height: 120,
+    borderRadius: 32,
+    backgroundColor: Colors.bgCard,
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 32,
   },
-  stepsList: { gap: 14, marginVertical: 24 },
-  step: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  h1: {
+    fontSize: 34,
+    fontFamily: "DM_Sans_700Bold",
+    color: Colors.text,
+    letterSpacing: -0.5,
+    lineHeight: 42,
+    marginBottom: 16,
+  },
+  body: {
+    fontSize: 16,
+    fontFamily: "DM_Sans_400Regular",
+    color: Colors.textSecondary,
+    lineHeight: 24,
+    marginBottom: 28,
+  },
+  stepList: { gap: 12, marginBottom: 28 },
+  stepCard: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 16,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.bgCard,
     borderRadius: 16,
     padding: 16,
   },
-  stepIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  stepLabel: { flex: 1, fontSize: 16, fontFamily: 'Inter_500Medium', color: Colors.text },
+  stepCardIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepCardTitle: {
+    fontSize: 15,
+    fontFamily: "DM_Sans_600SemiBold",
+    color: Colors.text,
+    marginBottom: 3,
+  },
+  stepCardSub: {
+    fontSize: 13,
+    fontFamily: "DM_Sans_400Regular",
+    color: Colors.textMuted,
+  },
   appGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
     marginBottom: 28,
   },
   appChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 7,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
+    borderRadius: 22,
+    backgroundColor: Colors.bgCard,
     borderWidth: 1.5,
-    borderColor: 'transparent',
+    borderColor: "transparent",
   },
-  appChipSelected: {
-    backgroundColor: Colors.softMint,
+  appChipOn: {
+    backgroundColor: Colors.primary,
     borderColor: Colors.primaryLight,
   },
   appChipText: {
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "DM_Sans_500Medium",
     color: Colors.textSecondary,
   },
-  appChipTextSelected: { color: Colors.primaryDeep },
+  appChipTextOn: { color: Colors.textInverted },
   areaGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
     marginBottom: 28,
   },
   areaCard: {
-    width: (SCREEN_WIDTH - 56 - 10) / 2,
-    backgroundColor: Colors.surface,
+    width: (W - 56 - 10) / 2,
+    backgroundColor: Colors.bgCard,
     borderRadius: 16,
     padding: 16,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
     gap: 6,
+    borderWidth: 1.5,
+    borderColor: "transparent",
   },
-  areaCardSelected: {
-    backgroundColor: Colors.softMint,
+  areaCardOn: {
+    backgroundColor: Colors.primary,
     borderColor: Colors.primaryLight,
   },
-  areaCardLabel: {
+  areaLabel: {
     fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "DM_Sans_600SemiBold",
     color: Colors.text,
   },
-  areaCardLabelSelected: { color: Colors.primaryDeep },
-  areaCardDesc: {
+  areaLabelOn: { color: Colors.textInverted },
+  areaSub: {
     fontSize: 11,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "DM_Sans_400Regular",
     color: Colors.textMuted,
   },
+  permRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: Colors.primaryMuted,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 28,
+  },
+  permNote: {
+    fontSize: 13,
+    fontFamily: "DM_Sans_400Regular",
+    color: Colors.textSecondary,
+    flex: 1,
+    lineHeight: 18,
+  },
+  stepFooter: { gap: 10, marginTop: "auto", paddingTop: 20 },
   nextBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.softMint,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.primary,
     borderRadius: 16,
     paddingVertical: 16,
-    gap: 8,
+    gap: 10,
   },
   nextBtnText: {
     fontSize: 17,
-    fontFamily: 'Inter_600SemiBold',
-    color: Colors.primaryDeep,
+    fontFamily: "DM_Sans_700Bold",
+    color: Colors.textInverted,
   },
-  startBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.softMint,
+  skipBtn: { alignItems: "center", paddingVertical: 10 },
+  skipBtnText: {
+    fontSize: 14,
+    fontFamily: "DM_Sans_400Regular",
+    color: Colors.textMuted,
+  },
+  launchBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.primary,
     borderRadius: 16,
     paddingVertical: 18,
     gap: 10,
   },
-  startBtnText: {
+  launchBtnText: {
     fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-    color: Colors.primaryDeep,
-  },
-  bottomNav: {
-    paddingHorizontal: 28,
-    paddingBottom: 20,
-    paddingTop: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  dots: { flexDirection: 'row', gap: 6 },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  dotActive: {
-    backgroundColor: Colors.primaryLight,
-    width: 20,
-  },
-  nextBtnSmall: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.softMint,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
-    gap: 6,
-  },
-  nextBtnSmallText: {
-    fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
-    color: Colors.primaryDeep,
+    fontFamily: "DM_Sans_700Bold",
+    color: Colors.textInverted,
   },
 });

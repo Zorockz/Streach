@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React from "react";
 import {
   Platform,
   Pressable,
@@ -12,11 +12,10 @@ import {
 } from "react-native";
 import Animated, {
   FadeInDown,
-  FadeInUp,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withSequence,
+  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,56 +24,66 @@ import { useApp } from "@/context/AppContext";
 import { getRandomStretch } from "@/constants/stretches";
 import { DISTRACTING_APPS } from "@/constants/stretches";
 
-function StatCard({ label, value, icon }: { label: string; value: string | number; icon: string }) {
-  return (
-    <View style={styles.statCard}>
-      <Ionicons name={icon as any} size={20} color={Colors.primaryLight} />
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function QuickStretchButton() {
+function PulseButton({ onPress }: { onPress: () => void }) {
   const scale = useSharedValue(1);
-  const { settings, recordSession } = useApp();
 
-  const animatedStyle = useAnimatedStyle(() => ({
+  const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
 
   const handlePress = async () => {
-    if (Platform.OS !== 'web') {
+    if (Platform.OS !== "web") {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     scale.value = withSequence(
-      withTiming(0.95, { duration: 100 }),
-      withSpring(1, { damping: 12 })
+      withTiming(0.96, { duration: 90 }),
+      withSpring(1, { damping: 10, stiffness: 180 })
     );
-    const stretch = getRandomStretch(settings.focusBodyAreas);
-    router.push({ pathname: '/stretch/session', params: { stretchId: stretch.id } });
+    onPress();
   };
 
   return (
-    <Animated.View style={animatedStyle}>
-      <Pressable style={styles.quickStretchBtn} onPress={handlePress}>
-        <View style={styles.quickStretchInner}>
-          <Ionicons name="body-outline" size={28} color={Colors.primaryDeep} />
-          <Text style={styles.quickStretchText}>Start a Stretch</Text>
-          <Text style={styles.quickStretchSub}>30 seconds · Feel better now</Text>
+    <Animated.View style={animStyle}>
+      <Pressable style={styles.quickBtn} onPress={handlePress}>
+        <View style={styles.quickBtnLeft}>
+          <View style={styles.quickBtnIcon}>
+            <Ionicons name="body-outline" size={22} color={Colors.textInverted} />
+          </View>
+          <View>
+            <Text style={styles.quickBtnTitle}>Start a Stretch</Text>
+            <Text style={styles.quickBtnSub}>Feel better in 30 seconds</Text>
+          </View>
         </View>
-        <Ionicons name="arrow-forward-circle" size={32} color={Colors.primaryDeep} />
+        <View style={styles.quickBtnArrow}>
+          <Ionicons name="arrow-forward" size={18} color={Colors.textInverted} />
+        </View>
       </Pressable>
     </Animated.View>
   );
 }
 
-function AppBadge({ app }: { app: typeof DISTRACTING_APPS[0] }) {
+function StatPill({
+  label,
+  value,
+  icon,
+  accent,
+}: {
+  label: string;
+  value: string | number;
+  icon: string;
+  accent?: boolean;
+}) {
   return (
-    <View style={styles.appBadge}>
-      <Ionicons name={app.icon as any} size={16} color={Colors.textSecondary} />
-      <Text style={styles.appBadgeName}>{app.name}</Text>
-      <View style={styles.lockDot} />
+    <View style={[styles.statPill, accent && styles.statPillAccent]}>
+      <Ionicons
+        name={icon as any}
+        size={16}
+        color={accent ? Colors.accent : Colors.primary}
+      />
+      <Text style={[styles.statValue, accent && styles.statValueAccent]}>
+        {value}
+      </Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
@@ -82,311 +91,392 @@ function AppBadge({ app }: { app: typeof DISTRACTING_APPS[0] }) {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { settings, todayCount, currentStreak, totalSessions } = useApp();
-  const lockedApps = DISTRACTING_APPS.filter(a => settings.lockedApps.includes(a.id));
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const lockedApps = DISTRACTING_APPS.filter((a) =>
+    settings.lockedApps.includes(a.id)
+  );
+  const progress = Math.min(todayCount / (settings.dailyGoal || 3), 1);
+  const goalMet = todayCount >= (settings.dailyGoal || 3);
+  const hour = new Date().getHours();
+  const greeting =
+    hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
-  const topPadding = Platform.OS === 'web' ? 67 : insets.top;
-  const bottomPadding = Platform.OS === 'web' ? 34 : 0;
-
-  const dailyProgress = Math.min(todayCount / settings.dailyGoal, 1);
-  const goalMet = todayCount >= settings.dailyGoal;
+  const handleStartStretch = () => {
+    const stretch = getRandomStretch(settings.focusBodyAreas);
+    router.push({
+      pathname: "/stretch/session",
+      params: { stretchId: stretch.id },
+    });
+  };
 
   return (
-    <View style={[styles.container, { paddingTop: topPadding, paddingBottom: bottomPadding }]}>
+    <View style={[styles.container, { paddingTop: topPad }]}>
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
       >
-        <Animated.View entering={FadeInDown.duration(600).delay(100)}>
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.greeting}>Good {getTimeOfDay()}</Text>
-              <Text style={styles.headline}>Ready to stretch?</Text>
-            </View>
-            <View style={styles.streakBadge}>
-              <Ionicons name="flame" size={18} color={Colors.accentWarm} />
-              <Text style={styles.streakCount}>{currentStreak}</Text>
-            </View>
+        {/* Header */}
+        <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>{greeting}</Text>
+            <Text style={styles.headline}>
+              {goalMet ? "Goal crushed!" : "Ready to move?"}
+            </Text>
           </View>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.duration(600).delay(200)}>
-          <QuickStretchButton />
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.duration(600).delay(300)} style={styles.statsRow}>
-          <StatCard label="Today" value={todayCount} icon="checkmark-circle-outline" />
-          <StatCard label="Streak" value={`${currentStreak}d`} icon="flame-outline" />
-          <StatCard label="Total" value={totalSessions} icon="trophy-outline" />
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.duration(600).delay(400)}>
-          <View style={styles.goalCard}>
-            <View style={styles.goalHeader}>
-              <Text style={styles.sectionTitle}>Daily Goal</Text>
-              {goalMet && (
-                <View style={styles.goalMetBadge}>
-                  <Ionicons name="checkmark" size={12} color={Colors.primaryDeep} />
-                  <Text style={styles.goalMetText}>Done!</Text>
-                </View>
-              )}
+          {currentStreak > 0 && (
+            <View style={styles.streakChip}>
+              <Ionicons name="flame" size={16} color={Colors.accent} />
+              <Text style={styles.streakNum}>{currentStreak}</Text>
             </View>
-            <Text style={styles.goalSub}>{todayCount} of {settings.dailyGoal} stretches</Text>
-            <View style={styles.progressTrack}>
-              <Animated.View
-                style={[
-                  styles.progressFill,
-                  { width: `${dailyProgress * 100}%` as any },
-                  goalMet && { backgroundColor: Colors.accentWarm },
-                ]}
-              />
-            </View>
+          )}
+        </Animated.View>
+
+        {/* Quick start */}
+        <Animated.View entering={FadeInDown.duration(500).delay(80)}>
+          <PulseButton onPress={handleStartStretch} />
+        </Animated.View>
+
+        {/* Stats row */}
+        <Animated.View
+          entering={FadeInDown.duration(500).delay(160)}
+          style={styles.statsRow}
+        >
+          <StatPill
+            label="Today"
+            value={todayCount}
+            icon="checkmark-circle-outline"
+          />
+          <StatPill
+            label="Streak"
+            value={`${currentStreak}d`}
+            icon="flame-outline"
+            accent
+          />
+          <StatPill
+            label="Total"
+            value={totalSessions}
+            icon="trophy-outline"
+          />
+        </Animated.View>
+
+        {/* Daily goal */}
+        <Animated.View
+          entering={FadeInDown.duration(500).delay(240)}
+          style={styles.card}
+        >
+          <View style={styles.cardRow}>
+            <Text style={styles.cardTitle}>Daily Goal</Text>
+            {goalMet ? (
+              <View style={styles.goalDoneBadge}>
+                <Ionicons name="checkmark" size={11} color={Colors.textInverted} />
+                <Text style={styles.goalDoneText}>Complete</Text>
+              </View>
+            ) : (
+              <Text style={styles.cardMeta}>
+                {todayCount}/{settings.dailyGoal}
+              </Text>
+            )}
           </View>
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${progress * 100}%`,
+                  backgroundColor: goalMet ? Colors.accent : Colors.primary,
+                },
+              ]}
+            />
+          </View>
+          <Text style={styles.progressHint}>
+            {goalMet
+              ? "You've hit your daily target"
+              : `${settings.dailyGoal - todayCount} stretch${settings.dailyGoal - todayCount !== 1 ? "es" : ""} to go`}
+          </Text>
         </Animated.View>
 
-        {lockedApps.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(600).delay(500)}>
-            <View style={styles.lockedSection}>
-              <Text style={styles.sectionTitle}>Locked Apps</Text>
-              <Text style={styles.sectionSub}>Stretch to unlock these</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.appsRow}
-              >
-                {lockedApps.map(app => (
-                  <AppBadge key={app.id} app={app} />
-                ))}
-              </ScrollView>
+        {/* Locked apps */}
+        {lockedApps.length > 0 ? (
+          <Animated.View
+            entering={FadeInDown.duration(500).delay(320)}
+            style={styles.card}
+          >
+            <View style={styles.cardRow}>
+              <Text style={styles.cardTitle}>Mindful Apps</Text>
+              <Pressable onPress={() => router.navigate("/settings")}>
+                <Text style={styles.cardLink}>Edit</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.cardSub}>
+              Stretch first, then scroll — honor system
+            </Text>
+            <View style={styles.appsWrap}>
+              {lockedApps.map((app) => (
+                <Pressable
+                  key={app.id}
+                  style={styles.appChip}
+                  onPress={handleStartStretch}
+                >
+                  <Ionicons
+                    name={app.icon as any}
+                    size={14}
+                    color={Colors.textSecondary}
+                  />
+                  <Text style={styles.appChipText}>{app.name}</Text>
+                  <Ionicons name="lock-closed" size={10} color={Colors.accent} />
+                </Pressable>
+              ))}
             </View>
           </Animated.View>
-        )}
-
-        {lockedApps.length === 0 && (
-          <Animated.View entering={FadeInDown.duration(600).delay(500)}>
+        ) : (
+          <Animated.View entering={FadeInDown.duration(500).delay(320)}>
             <Pressable
               style={styles.setupCard}
-              onPress={() => router.push('/settings')}
+              onPress={() => router.navigate("/settings")}
             >
-              <Ionicons name="lock-closed-outline" size={24} color={Colors.accentWarm} />
-              <View style={styles.setupCardText}>
-                <Text style={styles.setupCardTitle}>Set Up App Locks</Text>
-                <Text style={styles.setupCardSub}>Choose which apps require a stretch to unlock</Text>
+              <View style={[styles.setupIcon, { backgroundColor: Colors.accentMuted }]}>
+                <Ionicons name="lock-closed-outline" size={22} color={Colors.accent} />
               </View>
-              <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+              <View style={styles.setupText}>
+                <Text style={styles.setupTitle}>Lock distracting apps</Text>
+                <Text style={styles.setupSub}>
+                  Choose which apps require a stretch
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
             </Pressable>
           </Animated.View>
         )}
 
-        <View style={{ height: 120 }} />
+        {/* Browse library */}
+        <Animated.View entering={FadeInDown.duration(500).delay(400)}>
+          <Pressable
+            style={styles.libraryCard}
+            onPress={() => router.navigate("/stretches")}
+          >
+            <View style={[styles.setupIcon, { backgroundColor: Colors.primaryMuted }]}>
+              <Ionicons name="body-outline" size={22} color={Colors.primary} />
+            </View>
+            <View style={styles.setupText}>
+              <Text style={styles.setupTitle}>Browse stretch library</Text>
+              <Text style={styles.setupSub}>12 stretches for every area</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          </Pressable>
+        </Animated.View>
+
+        <View style={{ height: 110 }} />
       </ScrollView>
     </View>
   );
 }
 
-function getTimeOfDay() {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'morning';
-  if (hour < 17) return 'afternoon';
-  return 'evening';
-}
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-  },
+  container: { flex: 1, backgroundColor: Colors.bg },
+  scroll: { paddingHorizontal: 20, paddingTop: 8 },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 24,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 22,
   },
   greeting: {
-    fontSize: 14,
+    fontSize: 13,
+    fontFamily: "DM_Sans_400Regular",
     color: Colors.textMuted,
-    fontFamily: 'Inter_400Regular',
-    textTransform: 'capitalize',
     marginBottom: 2,
   },
   headline: {
-    fontSize: 28,
-    fontFamily: 'Inter_700Bold',
+    fontSize: 26,
+    fontFamily: "DM_Sans_700Bold",
     color: Colors.text,
-    lineHeight: 34,
+    letterSpacing: -0.3,
   },
-  streakBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(200, 168, 107, 0.15)',
+  streakChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: Colors.accentMuted,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 20,
-    gap: 4,
   },
-  streakCount: {
-    fontSize: 16,
-    fontFamily: 'Inter_700Bold',
-    color: Colors.accentWarm,
+  streakNum: {
+    fontSize: 15,
+    fontFamily: "DM_Sans_700Bold",
+    color: Colors.accent,
   },
-  quickStretchBtn: {
-    backgroundColor: Colors.softMint,
-    borderRadius: 20,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
+  quickBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 18,
+    padding: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
   },
-  quickStretchInner: {
-    gap: 4,
+  quickBtnLeft: { flexDirection: "row", alignItems: "center", gap: 14 },
+  quickBtnIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  quickStretchText: {
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-    color: Colors.primaryDeep,
+  quickBtnTitle: {
+    fontSize: 17,
+    fontFamily: "DM_Sans_700Bold",
+    color: Colors.textInverted,
+    marginBottom: 2,
   },
-  quickStretchSub: {
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
-    color: '#2D5E3A',
+  quickBtnSub: {
+    fontSize: 12,
+    fontFamily: "DM_Sans_400Regular",
+    color: "rgba(13,31,26,0.6)",
   },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 16,
+  quickBtnArrow: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  statCard: {
+  statsRow: { flexDirection: "row", gap: 9, marginBottom: 14 },
+  statPill: {
     flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    gap: 6,
+    backgroundColor: Colors.bgCard,
+    borderRadius: 14,
+    padding: 14,
+    alignItems: "center",
+    gap: 5,
   },
+  statPillAccent: { backgroundColor: Colors.accentMuted },
   statValue: {
-    fontSize: 22,
-    fontFamily: 'Inter_700Bold',
+    fontSize: 21,
+    fontFamily: "DM_Sans_700Bold",
     color: Colors.text,
   },
+  statValueAccent: { color: Colors.accent },
   statLabel: {
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+    fontFamily: "DM_Sans_500Medium",
     color: Colors.textMuted,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-  goalCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
+  card: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: 18,
     padding: 18,
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  goalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+  cardRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
+  cardTitle: {
+    fontSize: 15,
+    fontFamily: "DM_Sans_600SemiBold",
     color: Colors.text,
   },
-  goalMetBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.softMint,
+  cardMeta: {
+    fontSize: 13,
+    fontFamily: "DM_Sans_500Medium",
+    color: Colors.textSecondary,
+  },
+  cardLink: {
+    fontSize: 13,
+    fontFamily: "DM_Sans_500Medium",
+    color: Colors.primary,
+  },
+  cardSub: {
+    fontSize: 12,
+    fontFamily: "DM_Sans_400Regular",
+    color: Colors.textMuted,
+    marginBottom: 12,
+    lineHeight: 17,
+  },
+  goalDoneBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Colors.primary,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
-    gap: 3,
   },
-  goalMetText: {
+  goalDoneText: {
     fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
-    color: Colors.primaryDeep,
-  },
-  goalSub: {
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
-    color: Colors.textMuted,
-    marginBottom: 12,
+    fontFamily: "DM_Sans_600SemiBold",
+    color: Colors.textInverted,
   },
   progressTrack: {
-    height: 6,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    height: 5,
+    backgroundColor: "rgba(255,255,255,0.07)",
     borderRadius: 3,
-    overflow: 'hidden',
+    overflow: "hidden",
+    marginBottom: 8,
   },
-  progressFill: {
-    height: '100%',
-    backgroundColor: Colors.primaryLight,
-    borderRadius: 3,
-  },
-  lockedSection: {
-    marginBottom: 16,
-  },
-  sectionSub: {
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
+  progressFill: { height: "100%", borderRadius: 3 },
+  progressHint: {
+    fontSize: 12,
+    fontFamily: "DM_Sans_400Regular",
     color: Colors.textMuted,
-    marginTop: 2,
-    marginBottom: 12,
   },
-  appsRow: {
-    gap: 8,
-    paddingBottom: 4,
-  },
-  appBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
+  appsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  appChip: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
+    backgroundColor: Colors.bgCardAlt,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
   },
-  appBadgeName: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+  appChipText: {
+    fontSize: 12,
+    fontFamily: "DM_Sans_500Medium",
     color: Colors.textSecondary,
   },
-  lockDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.accentWarm,
-  },
   setupCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
+    backgroundColor: Colors.bgCard,
+    borderRadius: 18,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
     gap: 14,
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  setupCardText: {
-    flex: 1,
+  libraryCard: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: 18,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    marginBottom: 12,
   },
-  setupCardTitle: {
-    fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
+  setupIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  setupText: { flex: 1 },
+  setupTitle: {
+    fontSize: 14,
+    fontFamily: "DM_Sans_600SemiBold",
     color: Colors.text,
     marginBottom: 2,
   },
-  setupCardSub: {
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
+  setupSub: {
+    fontSize: 12,
+    fontFamily: "DM_Sans_400Regular",
     color: Colors.textMuted,
-    lineHeight: 18,
   },
 });

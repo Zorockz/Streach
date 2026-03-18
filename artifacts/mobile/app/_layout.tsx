@@ -1,10 +1,10 @@
 import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
+  DM_Sans_400Regular,
+  DM_Sans_500Medium,
+  DM_Sans_600SemiBold,
+  DM_Sans_700Bold,
   useFonts,
-} from "@expo-google-fonts/inter";
+} from "@expo-google-fonts/dm-sans";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -19,39 +19,54 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
-function RootLayoutNav() {
+function RootNavigator() {
   const { settings, isLoading } = useApp();
 
   useEffect(() => {
-    if (!isLoading) {
-      if (!settings.hasCompletedOnboarding) {
-        router.replace('/onboarding');
-      }
+    if (!isLoading && !settings.hasCompletedOnboarding) {
+      router.replace("/onboarding");
     }
-  }, [isLoading, settings.hasCompletedOnboarding]);
+  }, [isLoading]);
 
   return (
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: Colors.background },
-        animation: 'fade',
+        contentStyle: { backgroundColor: Colors.bg },
+        animation: "fade",
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="onboarding" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
-      <Stack.Screen name="stretch/[id]" options={{ headerShown: false, animation: 'slide_from_bottom', presentation: 'modal' }} />
-      <Stack.Screen name="stretch/session" options={{ headerShown: false, animation: 'fade', presentation: 'fullScreenModal' }} />
+      <Stack.Screen
+        name="onboarding"
+        options={{ headerShown: false, animation: "fade" }}
+      />
+      <Stack.Screen
+        name="stretch/[id]"
+        options={{
+          headerShown: false,
+          animation: "slide_from_bottom",
+          presentation: "modal",
+        }}
+      />
+      <Stack.Screen
+        name="stretch/session"
+        options={{
+          headerShown: false,
+          animation: "fade",
+          presentation: "fullScreenModal",
+        }}
+      />
     </Stack>
   );
 }
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
+    DM_Sans_400Regular,
+    DM_Sans_500Medium,
+    DM_Sans_600SemiBold,
+    DM_Sans_700Bold,
   });
 
   useEffect(() => {
@@ -68,7 +83,7 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView style={{ flex: 1 }}>
             <AppProvider>
-              <RootLayoutNav />
+              <RootNavigator />
             </AppProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>

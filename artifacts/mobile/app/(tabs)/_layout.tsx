@@ -1,37 +1,12 @@
 import { BlurView } from "expo-blur";
-import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
-import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
+import { Ionicons } from "@expo/vector-icons";
 import { SymbolView } from "expo-symbols";
-import { Feather, Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { Colors } from "@/constants/colors";
 
-function NativeTabLayout() {
-  return (
-    <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "house", selected: "house.fill" }} />
-        <Label>Home</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="stretches">
-        <Icon sf={{ default: "figure.flexibility", selected: "figure.flexibility" }} />
-        <Label>Stretches</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="progress">
-        <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
-        <Label>Progress</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="settings">
-        <Icon sf={{ default: "gearshape", selected: "gearshape.fill" }} />
-        <Label>Settings</Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
-  );
-}
-
-function ClassicTabLayout() {
+export default function TabLayout() {
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
 
@@ -39,54 +14,72 @@ function ClassicTabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.tabIconActive,
-        tabBarInactiveTintColor: Colors.tabIconInactive,
+        tabBarActiveTintColor: Colors.tabActive,
+        tabBarInactiveTintColor: Colors.tabInactive,
+        tabBarLabelStyle: {
+          fontFamily: "DM_Sans_500Medium",
+          fontSize: 11,
+          marginBottom: isWeb ? 0 : -2,
+        },
         tabBarStyle: {
           position: "absolute",
-          backgroundColor: isIOS ? "transparent" : Colors.tabBar,
-          borderTopWidth: isWeb ? 1 : 0,
-          borderTopColor: Colors.tabBarBorder,
+          backgroundColor: isIOS ? "transparent" : Colors.tabBg,
+          borderTopWidth: 1,
+          borderTopColor: Colors.primaryBorder,
           elevation: 0,
-          ...(isWeb ? { height: 84 } : {}),
+          ...(isWeb ? { height: 70 } : {}),
         },
         tabBarBackground: () =>
           isIOS ? (
             <BlurView
-              intensity={80}
+              intensity={70}
               tint="dark"
               style={StyleSheet.absoluteFill}
             />
-          ) : isWeb ? (
+          ) : (
             <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: Colors.tabBar },
-              ]}
+              style={[StyleSheet.absoluteFill, { backgroundColor: Colors.tabBg }]}
             />
-          ) : null,
+          ),
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color }) =>
+          tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView name="house" tintColor={color} size={24} />
+              <SymbolView
+                name={focused ? "house.fill" : "house"}
+                tintColor={color}
+                size={22}
+              />
             ) : (
-              <Feather name="home" size={22} color={color} />
+              <Ionicons
+                name={focused ? "home" : "home-outline"}
+                size={22}
+                color={color}
+              />
             ),
         }}
       />
       <Tabs.Screen
         name="stretches"
         options={{
-          title: "Stretches",
-          tabBarIcon: ({ color }) =>
+          title: "Library",
+          tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView name="figure.flexibility" tintColor={color} size={24} />
+              <SymbolView
+                name="figure.flexibility"
+                tintColor={color}
+                size={22}
+              />
             ) : (
-              <Ionicons name="body-outline" size={22} color={color} />
+              <Ionicons
+                name={focused ? "body" : "body-outline"}
+                size={22}
+                color={color}
+              />
             ),
         }}
       />
@@ -94,11 +87,19 @@ function ClassicTabLayout() {
         name="progress"
         options={{
           title: "Progress",
-          tabBarIcon: ({ color }) =>
+          tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView name="chart.bar" tintColor={color} size={24} />
+              <SymbolView
+                name={focused ? "chart.bar.fill" : "chart.bar"}
+                tintColor={color}
+                size={22}
+              />
             ) : (
-              <Ionicons name="bar-chart-outline" size={22} color={color} />
+              <Ionicons
+                name={focused ? "bar-chart" : "bar-chart-outline"}
+                size={22}
+                color={color}
+              />
             ),
         }}
       />
@@ -106,21 +107,22 @@ function ClassicTabLayout() {
         name="settings"
         options={{
           title: "Settings",
-          tabBarIcon: ({ color }) =>
+          tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView name="gearshape" tintColor={color} size={24} />
+              <SymbolView
+                name={focused ? "gearshape.fill" : "gearshape"}
+                tintColor={color}
+                size={22}
+              />
             ) : (
-              <Feather name="settings" size={22} color={color} />
+              <Ionicons
+                name={focused ? "settings" : "settings-outline"}
+                size={22}
+                color={color}
+              />
             ),
         }}
       />
     </Tabs>
   );
-}
-
-export default function TabLayout() {
-  if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
-  }
-  return <ClassicTabLayout />;
 }

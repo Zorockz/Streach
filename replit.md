@@ -1,6 +1,8 @@
-# Workspace
+# StretchGate
 
 ## Overview
+
+iOS-first Expo React Native wellness app. Users complete a 20–60 second guided micro-stretch before unlocking distracting apps (TikTok, Instagram, YouTube, etc.) — honor-system mechanic, no Screen Time API.
 
 pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
 
@@ -10,11 +12,46 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Node.js version**: 24
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+- **Mobile**: Expo SDK 54, expo-router 6, React Native 0.81
+- **State**: React Context + AsyncStorage (no external state manager)
+- **Font**: DM Sans via @expo-google-fonts/dm-sans
+- **Icons**: Expo Symbols (iOS SF Symbols), Ionicons (cross-platform)
+- **Animations**: react-native-reanimated v3
+- **Navigation**: expo-router file-based (tabs + modals)
+- **API framework**: Express 5 (API server artifact — not used by mobile MVP)
+- **Database**: PostgreSQL + Drizzle ORM (API server only)
+
+## Mobile App Structure (`artifacts/mobile`)
+
+```
+app/
+  _layout.tsx          — root layout, DM Sans fonts, AppProvider, navigation
+  (tabs)/
+    _layout.tsx        — tab bar with BlurView (iOS) / solid bg
+    index.tsx          — Home dashboard
+    stretches.tsx      — Stretch library with area filter
+    progress.tsx       — Progress chart + session history
+    settings.tsx       — App lock selection, body areas, daily goal
+  onboarding.tsx       — 6-step onboarding incl. notification permissions
+  stretch/
+    [id].tsx           — Stretch detail modal (slide_from_bottom)
+    session.tsx        — Full-screen session with breathing orb animation
+constants/
+  colors.ts            — Design tokens (bg #0D1F1A, primary #5DB483, accent #E8A642)
+  stretches.ts         — 12 stretches + 10 distracting apps + body areas
+context/
+  AppContext.tsx        — Settings + sessions via AsyncStorage, streak logic
+components/
+  ErrorBoundary.tsx
+```
+
+## Key Design Decisions
+
+- **Navigation**: `router.navigate('/settings')` for tab switching; `router.push('/stretch/session')` for modals
+- **Fonts**: DM_Sans_400Regular/500Medium/600SemiBold/700Bold
+- **No uuid**: use `Date.now().toString() + Math.random().toString(36).substr(2, 9)`
+- **Web guards**: `Platform.OS === 'web'` with 67px top / 34px bottom insets
+- **Stretch session**: breathing orb uses `withRepeat/withSequence` Reanimated, timer uses setInterval + Date.now()
 
 ## Structure
 

@@ -1,67 +1,46 @@
-const palette = {
-  forestGreen: '#1A3B2E',
-  deepGreen: '#0F2820',
-  sageGreen: '#4A7C59',
-  mintGreen: '#7AB893',
-  softMint: '#A8D5B5',
-  creamWhite: '#F5F0E8',
-  warmWhite: '#FAF7F2',
-  mutedCream: '#E8E2D6',
-  goldenAmber: '#C8A86B',
-  warmAmber: '#E8C17A',
-  softGold: '#F0D49A',
-  charcoal: '#2D3748',
-  mediumGray: '#718096',
-  lightGray: '#E2E8F0',
-  errorRed: '#E53E3E',
-  warningOrange: '#DD6B20',
-  white: '#FFFFFF',
-  black: '#000000',
-  overlayDark: 'rgba(15, 40, 32, 0.85)',
-  overlayLight: 'rgba(245, 240, 232, 0.9)',
-  cardBackground: 'rgba(255, 255, 255, 0.08)',
-  cardBorder: 'rgba(255, 255, 255, 0.12)',
-};
-
 export const Colors = {
-  primary: palette.sageGreen,
-  primaryDark: palette.forestGreen,
-  primaryDeep: palette.deepGreen,
-  primaryLight: palette.mintGreen,
-  primarySoft: palette.softMint,
+  // Backgrounds
+  bg: '#0D1F1A',
+  bgSurface: '#162920',
+  bgCard: '#1C3429',
+  bgCardAlt: '#1A2F27',
+  bgInverted: '#F2EFE9',
 
-  accent: palette.goldenAmber,
-  accentWarm: palette.warmAmber,
-  accentSoft: palette.softGold,
+  // Primary — sage/mint green
+  primary: '#5DB483',
+  primaryLight: '#7ECBA0',
+  primaryMuted: 'rgba(93, 180, 131, 0.18)',
+  primaryBorder: 'rgba(93, 180, 131, 0.25)',
 
-  background: palette.deepGreen,
-  surface: palette.forestGreen,
-  surfaceLight: 'rgba(74, 124, 89, 0.2)',
+  // Accent — warm amber
+  accent: '#E8A642',
+  accentLight: '#F0BC6A',
+  accentMuted: 'rgba(232, 166, 66, 0.15)',
 
-  text: palette.creamWhite,
-  textSecondary: palette.softMint,
-  textMuted: 'rgba(168, 213, 181, 0.6)',
-  textDark: palette.charcoal,
+  // Text
+  text: '#EDF2EE',
+  textSecondary: '#A5C4AF',
+  textMuted: 'rgba(165, 196, 175, 0.5)',
+  textInverted: '#0D1F1A',
+  textAccent: '#E8A642',
 
-  cream: palette.creamWhite,
-  warmWhite: palette.warmWhite,
-  mutedCream: palette.mutedCream,
+  // Utility
+  error: '#E05555',
+  errorMuted: 'rgba(224, 85, 85, 0.15)',
+  success: '#5DB483',
+  white: '#FFFFFF',
 
-  error: palette.errorRed,
-  warning: palette.warningOrange,
+  // Tab bar
+  tabBg: '#0D1F1A',
+  tabActive: '#7ECBA0',
+  tabInactive: 'rgba(165, 196, 175, 0.35)',
 
-  cardBg: palette.cardBackground,
-  cardBorder: palette.cardBorder,
-  overlay: palette.overlayDark,
+  // Divider
+  divider: 'rgba(255,255,255,0.06)',
 
-  tabBar: palette.deepGreen,
-  tabBarBorder: 'rgba(74, 124, 89, 0.3)',
-  tabIconActive: palette.mintGreen,
-  tabIconInactive: 'rgba(168, 213, 181, 0.4)',
-
-  tint: palette.mintGreen,
-  tabIconDefault: 'rgba(168, 213, 181, 0.4)',
-  tabIconSelected: palette.mintGreen,
+  // Overlays
+  overlay: 'rgba(13, 31, 26, 0.92)',
+  overlayLight: 'rgba(13, 31, 26, 0.6)',
 };
 
 export default Colors;

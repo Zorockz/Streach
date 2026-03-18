@@ -12,7 +12,9 @@ export interface Stretch {
   difficulty: StretchDifficulty;
   icon: string;
   breathingCue: string;
+  tip?: string;
 }
+
 
 export const BODY_AREAS: { id: BodyArea; label: string; icon: string; description: string }[] = [
   { id: 'neck', label: 'Neck', icon: 'person-outline', description: 'Relieve neck tension' },
@@ -258,7 +260,7 @@ export function getStretchesForAreas(areas: BodyArea[]): Stretch[] {
   return STRETCHES.filter(s => s.bodyArea.some(a => areas.includes(a) || a === 'full'));
 }
 
-export function getRandomStretch(areas: BodyArea[]): Stretch {
+export function getRandomStretch(areas: BodyArea[] = []): Stretch {
   const pool = getStretchesForAreas(areas);
   return pool[Math.floor(Math.random() * pool.length)];
 }

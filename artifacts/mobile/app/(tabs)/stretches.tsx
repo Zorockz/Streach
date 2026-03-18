@@ -14,243 +14,205 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { BODY_AREAS, STRETCHES, BodyArea } from "@/constants/stretches";
-import { useApp } from "@/context/AppContext";
 
-function AreaPill({ area, active, onPress }: {
-  area: typeof BODY_AREAS[0];
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      style={[styles.areaPill, active && styles.areaPillActive]}
-      onPress={onPress}
-    >
-      <Ionicons
-        name={area.icon as any}
-        size={14}
-        color={active ? Colors.primaryDeep : Colors.textSecondary}
-      />
-      <Text style={[styles.areaPillText, active && styles.areaPillTextActive]}>
-        {area.label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function StretchCard({ stretch, onPress }: {
-  stretch: typeof STRETCHES[0];
-  onPress: () => void;
-}) {
-  const durationLabel = stretch.durationSeconds < 60
-    ? `${stretch.durationSeconds}s`
-    : `${Math.floor(stretch.durationSeconds / 60)}m`;
-
-  return (
-    <Pressable style={styles.stretchCard} onPress={onPress}>
-      <View style={styles.stretchIconBox}>
-        <Ionicons name={stretch.icon as any} size={26} color={Colors.primaryLight} />
-      </View>
-      <View style={styles.stretchInfo}>
-        <Text style={styles.stretchName}>{stretch.name}</Text>
-        <Text style={styles.stretchDesc} numberOfLines={2}>{stretch.description}</Text>
-        <View style={styles.stretchMeta}>
-          {stretch.bodyArea.map(a => (
-            <View key={a} style={styles.bodyTag}>
-              <Text style={styles.bodyTagText}>{a}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-      <View style={styles.stretchDuration}>
-        <Text style={styles.durationText}>{durationLabel}</Text>
-        <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-      </View>
-    </Pressable>
-  );
-}
+const AREA_ICONS: Record<string, string> = {
+  neck: "swap-vertical-outline",
+  shoulders: "chevron-expand-outline",
+  back: "body-outline",
+  wrists: "hand-left-outline",
+  hips: "walk-outline",
+  full: "pulse-outline",
+};
 
 export default function StretchesScreen() {
   const insets = useSafeAreaInsets();
-  const { settings } = useApp();
-  const [selectedArea, setSelectedArea] = useState<BodyArea | null>(null);
+  const [selected, setSelected] = useState<BodyArea | null>(null);
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const bottomPad = Platform.OS === "web" ? 34 : 0;
 
-  const topPadding = Platform.OS === 'web' ? 67 : insets.top;
-  const bottomPadding = Platform.OS === 'web' ? 34 : 0;
-
-  const filteredStretches = selectedArea
-    ? STRETCHES.filter(s => s.bodyArea.includes(selectedArea) || s.bodyArea.includes('full'))
+  const filtered = selected
+    ? STRETCHES.filter(
+        (s) => s.bodyArea.includes(selected) || s.bodyArea.includes("full")
+      )
     : STRETCHES;
 
-  const handleAreaPress = async (areaId: BodyArea) => {
-    if (Platform.OS !== 'web') await Haptics.selectionAsync();
-    setSelectedArea(selectedArea === areaId ? null : areaId);
+  const handleArea = async (id: BodyArea) => {
+    if (Platform.OS !== "web") await Haptics.selectionAsync();
+    setSelected(selected === id ? null : id);
   };
 
-  const handleStretchPress = async (stretchId: string) => {
-    if (Platform.OS !== 'web') await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push({ pathname: '/stretch/[id]', params: { id: stretchId } });
+  const handleStretch = async (id: string) => {
+    if (Platform.OS !== "web")
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push({ pathname: "/stretch/[id]", params: { id } });
   };
 
   return (
-    <View style={[styles.container, { paddingTop: topPadding, paddingBottom: bottomPadding }]}>
+    <View style={[styles.container, { paddingTop: topPad, paddingBottom: bottomPad }]}>
       <View style={styles.header}>
         <Text style={styles.title}>Stretch Library</Text>
-        <Text style={styles.subtitle}>{STRETCHES.length} stretches ready</Text>
+        <Text style={styles.sub}>{filtered.length} stretches</Text>
       </View>
 
+      {/* Area filter */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.areasRow}
-        style={styles.areasScroll}
+        contentContainerStyle={styles.filterRow}
+        style={styles.filterScroll}
       >
-        {BODY_AREAS.map(area => (
-          <AreaPill
+        {BODY_AREAS.map((area) => (
+          <Pressable
             key={area.id}
-            area={area}
-            active={selectedArea === area.id}
-            onPress={() => handleAreaPress(area.id)}
-          />
+            style={[styles.pill, selected === area.id && styles.pillActive]}
+            onPress={() => handleArea(area.id)}
+          >
+            <Ionicons
+              name={AREA_ICONS[area.id] as any}
+              size={13}
+              color={
+                selected === area.id ? Colors.textInverted : Colors.textSecondary
+              }
+            />
+            <Text
+              style={[
+                styles.pillText,
+                selected === area.id && styles.pillTextActive,
+              ]}
+            >
+              {area.label}
+            </Text>
+          </Pressable>
         ))}
       </ScrollView>
 
       <ScrollView
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.list}
       >
-        {filteredStretches.map((stretch, i) => (
+        {filtered.map((stretch, i) => (
           <Animated.View
             key={stretch.id}
-            entering={FadeInDown.duration(400).delay(i * 50)}
+            entering={FadeInDown.duration(350).delay(i * 40)}
           >
-            <StretchCard
-              stretch={stretch}
-              onPress={() => handleStretchPress(stretch.id)}
-            />
+            <Pressable
+              style={styles.card}
+              onPress={() => handleStretch(stretch.id)}
+            >
+              <View style={styles.cardIcon}>
+                <Ionicons
+                  name={stretch.icon as any}
+                  size={24}
+                  color={Colors.primary}
+                />
+              </View>
+              <View style={styles.cardBody}>
+                <Text style={styles.cardName}>{stretch.name}</Text>
+                <Text style={styles.cardDesc} numberOfLines={1}>
+                  {stretch.description}
+                </Text>
+                <View style={styles.cardTags}>
+                  {stretch.bodyArea.slice(0, 2).map((a) => (
+                    <View key={a} style={styles.tag}>
+                      <Text style={styles.tagText}>{a}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+              <View style={styles.cardRight}>
+                <Text style={styles.duration}>{stretch.durationSeconds}s</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={Colors.textMuted}
+                />
+              </View>
+            </Pressable>
           </Animated.View>
         ))}
-        <View style={{ height: 120 }} />
+        <View style={{ height: 110 }} />
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    marginBottom: 16,
-  },
+  container: { flex: 1, backgroundColor: Colors.bg },
+  header: { paddingHorizontal: 20, paddingTop: 8, marginBottom: 14 },
   title: {
-    fontSize: 28,
-    fontFamily: 'Inter_700Bold',
+    fontSize: 26,
+    fontFamily: "DM_Sans_700Bold",
     color: Colors.text,
+    letterSpacing: -0.3,
     marginBottom: 2,
   },
-  subtitle: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    color: Colors.textMuted,
-  },
-  areasScroll: {
-    marginBottom: 16,
-  },
-  areasRow: {
-    paddingHorizontal: 20,
-    gap: 8,
-  },
-  areaPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  sub: { fontSize: 13, fontFamily: "DM_Sans_400Regular", color: Colors.textMuted },
+  filterScroll: { marginBottom: 14 },
+  filterRow: { paddingHorizontal: 20, gap: 8 },
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.bgCard,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'transparent',
   },
-  areaPillActive: {
-    backgroundColor: Colors.softMint,
-    borderColor: Colors.primaryLight,
-  },
-  areaPillText: {
+  pillActive: { backgroundColor: Colors.primary },
+  pillText: {
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "DM_Sans_500Medium",
     color: Colors.textSecondary,
   },
-  areaPillTextActive: {
-    color: Colors.primaryDeep,
-  },
-  list: {
-    flex: 1,
-  },
-  listContent: {
-    paddingHorizontal: 20,
-    gap: 10,
-  },
-  stretchCard: {
-    backgroundColor: Colors.surface,
+  pillTextActive: { color: Colors.textInverted },
+  list: { paddingHorizontal: 20, gap: 10 },
+  card: {
+    backgroundColor: Colors.bgCard,
     borderRadius: 16,
     padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 14,
   },
-  stretchIconBox: {
-    width: 52,
-    height: 52,
+  cardIcon: {
+    width: 50,
+    height: 50,
     borderRadius: 14,
-    backgroundColor: 'rgba(122, 184, 147, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: Colors.primaryMuted,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  stretchInfo: {
-    flex: 1,
-  },
-  stretchName: {
+  cardBody: { flex: 1 },
+  cardName: {
     fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "DM_Sans_600SemiBold",
     color: Colors.text,
     marginBottom: 3,
   },
-  stretchDesc: {
+  cardDesc: {
     fontSize: 12,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "DM_Sans_400Regular",
     color: Colors.textMuted,
-    lineHeight: 17,
-    marginBottom: 8,
+    lineHeight: 16,
+    marginBottom: 7,
   },
-  stretchMeta: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 5,
-  },
-  bodyTag: {
-    backgroundColor: 'rgba(122, 184, 147, 0.12)',
-    paddingHorizontal: 8,
+  cardTags: { flexDirection: "row", gap: 5 },
+  tag: {
+    backgroundColor: "rgba(93,180,131,0.1)",
+    paddingHorizontal: 7,
     paddingVertical: 2,
-    borderRadius: 8,
+    borderRadius: 6,
   },
-  bodyTagText: {
+  tagText: {
     fontSize: 10,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: "DM_Sans_500Medium",
     color: Colors.primaryLight,
-    textTransform: 'capitalize',
+    textTransform: "capitalize",
   },
-  stretchDuration: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  durationText: {
+  cardRight: { alignItems: "center", gap: 6 },
+  duration: {
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: "DM_Sans_600SemiBold",
     color: Colors.textSecondary,
   },
 });

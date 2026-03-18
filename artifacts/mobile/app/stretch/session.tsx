@@ -3,544 +3,583 @@ import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Dimensions,
   Platform,
   Pressable,
+  ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import Animated, {
+  Easing,
   FadeIn,
   FadeInDown,
-  FadeInUp,
   FadeOut,
+  interpolate,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withSequence,
-  withSpring,
   withTiming,
-  Easing,
-  cancelAnimation,
-  runOnJS,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { STRETCHES, getRandomStretch } from "@/constants/stretches";
 import { useApp } from "@/context/AppContext";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+type Phase = "ready" | "running" | "done";
+type Breath = "in" | "hold" | "out";
 
-type SessionPhase = 'prep' | 'active' | 'done';
+const BREATH_CYCLE = { in: 4000, hold: 2000, out: 5000 };
 
-function BreathingOrb({ isActive }: { isActive: boolean }) {
+function BreathingOrb({
+  isRunning,
+  phase,
+}: {
+  isRunning: boolean;
+  phase: Breath;
+}) {
   const scale = useSharedValue(1);
-  const opacity = useSharedValue(0.6);
+  const opacity = useSharedValue(0.55);
 
   useEffect(() => {
-    if (isActive) {
-      scale.value = withRepeat(
-        withSequence(
-          withTiming(1.18, { duration: 3800, easing: Easing.inOut(Easing.sine) }),
-          withTiming(1, { duration: 3800, easing: Easing.inOut(Easing.sine) })
-        ),
-        -1,
-        false
-      );
-      opacity.value = withRepeat(
-        withSequence(
-          withTiming(1, { duration: 3800, easing: Easing.inOut(Easing.sine) }),
-          withTiming(0.5, { duration: 3800, easing: Easing.inOut(Easing.sine) })
-        ),
-        -1,
-        false
-      );
-    } else {
-      cancelAnimation(scale);
-      cancelAnimation(opacity);
+    if (!isRunning) {
       scale.value = withTiming(1, { duration: 600 });
-      opacity.value = withTiming(0.6, { duration: 600 });
+      opacity.value = withTiming(0.55, { duration: 600 });
+      return;
     }
-  }, [isActive]);
+    scale.value = withRepeat(
+      withSequence(
+        withTiming(1.32, {
+          duration: BREATH_CYCLE.in,
+          easing: Easing.inOut(Easing.ease),
+        }),
+        withTiming(1.32, {
+          duration: BREATH_CYCLE.hold,
+          easing: Easing.linear,
+        }),
+        withTiming(1, {
+          duration: BREATH_CYCLE.out,
+          easing: Easing.inOut(Easing.ease),
+        })
+      ),
+      -1,
+      false
+    );
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.85, {
+          duration: BREATH_CYCLE.in,
+          easing: Easing.inOut(Easing.ease),
+        }),
+        withTiming(0.85, {
+          duration: BREATH_CYCLE.hold,
+          easing: Easing.linear,
+        }),
+        withTiming(0.45, {
+          duration: BREATH_CYCLE.out,
+          easing: Easing.inOut(Easing.ease),
+        })
+      ),
+      -1,
+      false
+    );
+  }, [isRunning]);
 
-  const outerStyle = useAnimatedStyle(() => ({
+  const orbStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
     opacity: opacity.value,
   }));
 
-  const innerScale = useSharedValue(1);
-  useEffect(() => {
-    if (isActive) {
-      innerScale.value = withRepeat(
-        withSequence(
-          withTiming(1.08, { duration: 3800, easing: Easing.inOut(Easing.sine) }),
-          withTiming(0.95, { duration: 3800, easing: Easing.inOut(Easing.sine) })
-        ),
-        -1,
-        false
-      );
-    } else {
-      cancelAnimation(innerScale);
-      innerScale.value = withTiming(1, { duration: 600 });
-    }
-  }, [isActive]);
-
-  const innerStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: innerScale.value }],
+  const outerStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(scale.value, [1, 1.32], [1, 1.14]) }],
+    opacity: interpolate(scale.value, [1, 1.32], [0.15, 0.3]),
   }));
 
-  return (
-    <Animated.View style={[styles.orbOuter, outerStyle]}>
-      <Animated.View style={[styles.orbInner, innerStyle]} />
-    </Animated.View>
-  );
-}
-
-function CircularTimer({ progress, duration }: { progress: number; duration: number }) {
-  const size = 200;
-  const strokeWidth = 6;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference * (1 - progress);
+  const breathColors = {
+    in: Colors.primaryLight,
+    hold: Colors.primary,
+    out: Colors.bgCard,
+  };
 
   return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <BreathingOrb isActive={progress > 0 && progress < 1} />
+    <View style={orb.container}>
+      {/* Outer glow */}
+      <Animated.View style={[orb.outer, outerStyle]} />
+      {/* Core */}
+      <Animated.View
+        style={[
+          orb.core,
+          orbStyle,
+          isRunning && { backgroundColor: breathColors[phase] },
+        ]}
+      />
+      {/* Center icon */}
+      <View style={orb.iconLayer} pointerEvents="none">
+        <Ionicons
+          name="body-outline"
+          size={32}
+          color={
+            isRunning ? Colors.textInverted : Colors.textSecondary
+          }
+        />
+      </View>
     </View>
   );
 }
 
+const orb = StyleSheet.create({
+  container: {
+    width: 200,
+    height: 200,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  outer: {
+    position: "absolute",
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: Colors.primary,
+  },
+  core: {
+    position: "absolute",
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: Colors.primaryMuted,
+  },
+  iconLayer: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
+
 export default function StretchSessionScreen() {
-  const { stretchId, targetApp } = useLocalSearchParams<{ stretchId?: string; targetApp?: string }>();
-  const { settings, recordSession } = useApp();
+  const { stretchId, targetApp } = useLocalSearchParams<{
+    stretchId?: string;
+    targetApp?: string;
+  }>();
   const insets = useSafeAreaInsets();
+  const { recordSession } = useApp();
 
   const stretch = stretchId
-    ? STRETCHES.find(s => s.id === stretchId) ?? getRandomStretch(settings.focusBodyAreas)
-    : getRandomStretch(settings.focusBodyAreas);
+    ? STRETCHES.find((s) => s.id === stretchId)
+    : getRandomStretch();
 
-  const duration = Math.max(stretch.durationSeconds, settings.preferredDuration);
-  const [phase, setPhase] = useState<SessionPhase>('prep');
-  const [timeLeft, setTimeLeft] = useState(duration);
-  const [currentStep, setCurrentStep] = useState(0);
+  const [phase, setPhase] = useState<Phase>("ready");
+  const [elapsed, setElapsed] = useState(0);
+  const [breathPhase, setBreathPhase] = useState<Breath>("in");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const breathTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startTimeRef = useRef<number>(0);
+  const duration = stretch?.durationSeconds ?? 30;
 
-  const topPadding = Platform.OS === 'web' ? 67 : insets.top;
-  const bottomPadding = Platform.OS === 'web' ? 34 : insets.bottom;
+  const remaining = Math.max(0, duration - elapsed);
+  const progress = Math.min(elapsed / duration, 1);
 
-  const progress = 1 - (timeLeft / duration);
+  const clearTimers = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (breathTimerRef.current) clearTimeout(breathTimerRef.current);
+  };
 
-  const progressAnim = useSharedValue(0);
+  const runBreathCycle = useCallback(() => {
+    const cycle = () => {
+      setBreathPhase("in");
+      breathTimerRef.current = setTimeout(() => {
+        setBreathPhase("hold");
+        breathTimerRef.current = setTimeout(() => {
+          setBreathPhase("out");
+          breathTimerRef.current = setTimeout(cycle, BREATH_CYCLE.out);
+        }, BREATH_CYCLE.hold);
+      }, BREATH_CYCLE.in);
+    };
+    cycle();
+  }, []);
 
-  const handleStart = useCallback(async () => {
-    if (Platform.OS !== 'web') await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    setPhase('active');
+  const handleStart = async () => {
+    if (Platform.OS !== "web")
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setPhase("running");
+    setElapsed(0);
     startTimeRef.current = Date.now();
-    setTimeLeft(duration);
-    progressAnim.value = 0;
-    progressAnim.value = withTiming(1, { duration: duration * 1000, easing: Easing.linear });
-
+    runBreathCycle();
     intervalRef.current = setInterval(() => {
-      const elapsed = (Date.now() - startTimeRef.current) / 1000;
-      const remaining = Math.max(0, duration - elapsed);
-      setTimeLeft(Math.ceil(remaining));
-
-      const stepIndex = Math.min(
-        Math.floor((elapsed / duration) * stretch.instructions.length),
-        stretch.instructions.length - 1
-      );
-      setCurrentStep(stepIndex);
-
-      if (remaining <= 0) {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        setPhase('done');
-        if (Platform.OS !== 'web') {
+      const el = Math.floor((Date.now() - startTimeRef.current) / 1000);
+      setElapsed(el);
+      if (el >= duration) {
+        clearTimers();
+        setPhase("done");
+        if (Platform.OS !== "web")
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        }
       }
-    }, 200);
-  }, [duration, stretch]);
+    }, 500);
+  };
 
-  const handleComplete = useCallback(async () => {
-    if (Platform.OS !== 'web') await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  const handleComplete = async () => {
+    if (!stretch) return;
     await recordSession({
       stretchId: stretch.id,
       stretchName: stretch.name,
       durationSeconds: duration,
-      targetApp: targetApp || undefined,
+      targetApp: targetApp,
     });
     router.back();
-  }, [stretch, duration, targetApp, recordSession]);
-
-  const handleSkip = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    router.back();
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, []);
-
-  const progressBarStyle = useAnimatedStyle(() => ({
-    width: `${progressAnim.value * 100}%` as any,
-  }));
-
-  const formatTime = (t: number) => {
-    const m = Math.floor(t / 60);
-    const s = t % 60;
-    return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}`;
   };
 
-  if (phase === 'done') {
+  const handleSkip = async () => {
+    if (Platform.OS !== "web") await Haptics.selectionAsync();
+    clearTimers();
+    router.back();
+  };
+
+  const handleEarlyComplete = async () => {
+    if (!stretch) return;
+    clearTimers();
+    setPhase("done");
+    if (Platform.OS !== "web")
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  useEffect(() => () => clearTimers(), []);
+
+  if (!stretch) {
     return (
-      <View style={[styles.container, { paddingTop: topPadding, paddingBottom: bottomPadding }]}>
-        <Animated.View entering={FadeIn.duration(600)} style={styles.doneContainer}>
-          <View style={styles.doneCircle}>
-            <Ionicons name="checkmark" size={60} color={Colors.primaryDeep} />
-          </View>
-          <Text style={styles.doneTitle}>Stretch Complete!</Text>
-          <Text style={styles.doneSub}>
-            {duration} seconds well spent.{'\n'}Your body appreciates you.
-          </Text>
-
-          {targetApp && (
-            <View style={styles.unlockBadge}>
-              <Ionicons name="lock-open-outline" size={18} color={Colors.accentWarm} />
-              <Text style={styles.unlockText}>{targetApp} unlocked</Text>
-            </View>
-          )}
-
-          <Animated.View entering={FadeInUp.duration(500).delay(300)} style={styles.doneBtns}>
-            <Pressable style={styles.doneBtn} onPress={handleComplete}>
-              <Text style={styles.doneBtnText}>Done</Text>
-            </Pressable>
-          </Animated.View>
-        </Animated.View>
+      <View style={styles.container}>
+        <Text style={{ color: Colors.text }}>Stretch not found</Text>
       </View>
     );
   }
 
-  if (phase === 'prep') {
-    return (
-      <View style={[styles.container, { paddingTop: topPadding, paddingBottom: bottomPadding }]}>
-        <View style={styles.header}>
-          <Pressable style={styles.closeBtn} onPress={handleSkip}>
-            <Ionicons name="close" size={22} color={Colors.text} />
-          </Pressable>
-        </View>
+  const breathLabel =
+    phase === "running"
+      ? breathPhase === "in"
+        ? "Breathe in"
+        : breathPhase === "hold"
+          ? "Hold"
+          : "Breathe out"
+      : phase === "ready"
+        ? "Tap to begin"
+        : "Well done!";
 
-        <Animated.View entering={FadeInDown.duration(600)} style={styles.prepContent}>
-          <View style={styles.prepIcon}>
-            <Ionicons name={stretch.icon as any} size={56} color={Colors.primaryLight} />
-          </View>
-          <Text style={styles.prepName}>{stretch.name}</Text>
-          <Text style={styles.prepDesc}>{stretch.description}</Text>
-          <Text style={styles.prepDuration}>{duration} seconds</Text>
-
-          <View style={styles.prepFirstStep}>
-            <Text style={styles.prepFirstStepLabel}>To start:</Text>
-            <Text style={styles.prepFirstStepText}>{stretch.instructions[0]}</Text>
-          </View>
-        </Animated.View>
-
-        <Animated.View entering={FadeInUp.duration(600).delay(200)} style={styles.prepBottom}>
-          <Text style={styles.breathingHint}>{stretch.breathingCue}</Text>
-          <Pressable style={styles.startBtn} onPress={handleStart}>
-            <Ionicons name="play" size={22} color={Colors.primaryDeep} />
-            <Text style={styles.startBtnText}>Begin Stretch</Text>
-          </Pressable>
-          <Pressable style={styles.skipBtn} onPress={handleSkip}>
-            <Text style={styles.skipBtnText}>Skip</Text>
-          </Pressable>
-        </Animated.View>
-      </View>
-    );
-  }
+  const formatTime = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return m > 0 ? `${m}:${sec.toString().padStart(2, "0")}` : `${sec}`;
+  };
 
   return (
-    <View style={[styles.container, { paddingTop: topPadding, paddingBottom: bottomPadding }]}>
-      <View style={styles.activeProgressTrack}>
-        <Animated.View style={[styles.activeProgressFill, progressBarStyle]} />
-      </View>
+    <View
+      style={[
+        styles.container,
+        {
+          paddingTop: Platform.OS === "web" ? 67 : insets.top,
+          paddingBottom: Platform.OS === "web" ? 34 : insets.bottom,
+        },
+      ]}
+    >
+      <StatusBar barStyle="light-content" />
 
-      <View style={styles.header}>
-        <Pressable style={styles.closeBtn} onPress={handleSkip}>
-          <Ionicons name="close" size={22} color={Colors.text} />
+      {/* Header */}
+      <View style={styles.headerRow}>
+        <Pressable style={styles.backBtn} onPress={handleSkip}>
+          <Ionicons name="close" size={20} color={Colors.textSecondary} />
         </Pressable>
-        <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
-        <View style={{ width: 40 }} />
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>{stretch.name}</Text>
+          {targetApp && (
+            <View style={styles.headerTag}>
+              <Ionicons name="lock-open-outline" size={11} color={Colors.accent} />
+              <Text style={styles.headerTagText}>Unlocks {targetApp}</Text>
+            </View>
+          )}
+        </View>
+        {phase === "running" && (
+          <Pressable onPress={handleEarlyComplete} style={styles.earlyBtn}>
+            <Text style={styles.earlyBtnText}>Done</Text>
+          </Pressable>
+        )}
+        {phase !== "running" && <View style={{ width: 60 }} />}
       </View>
 
-      <View style={styles.activeContent}>
-        <View style={styles.orbContainer}>
-          <BreathingOrb isActive={true} />
-          <Text style={styles.stretchNameActive}>{stretch.name}</Text>
-        </View>
+      {/* Progress ring (simple arc using rotation trick) */}
+      {phase === "running" && (
+        <Animated.View
+          entering={FadeIn.duration(400)}
+          style={styles.progressWrap}
+        >
+          <View style={styles.progressTrackOuter}>
+            <View
+              style={[
+                styles.progressFill,
+                { width: `${progress * 100}%` },
+              ]}
+            />
+          </View>
+          <Text style={styles.timerLabel}>{formatTime(remaining)}</Text>
+        </Animated.View>
+      )}
 
-        <View style={styles.instructionCard}>
-          <Text style={styles.stepLabel}>
-            Step {currentStep + 1} of {stretch.instructions.length}
-          </Text>
-          <Animated.Text key={currentStep} entering={FadeIn.duration(400)} style={styles.stepText}>
-            {stretch.instructions[currentStep]}
-          </Animated.Text>
-        </View>
+      {/* Orb */}
+      <View style={styles.orbSection}>
+        <BreathingOrb isRunning={phase === "running"} phase={breathPhase} />
+        <Animated.Text
+          key={breathLabel}
+          entering={FadeIn.duration(400)}
+          style={[
+            styles.breathLabel,
+            phase === "done" && { color: Colors.primary },
+          ]}
+        >
+          {breathLabel}
+        </Animated.Text>
+      </View>
 
-        <View style={styles.breathingCueBox}>
-          <Ionicons name="leaf-outline" size={16} color={Colors.primaryLight} />
-          <Text style={styles.breathingCueText}>{stretch.breathingCue}</Text>
-        </View>
+      {/* Instructions */}
+      {stretch.instructions && stretch.instructions.length > 0 && (
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.instrCard}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={{ maxHeight: 120 }}
+          >
+            {stretch.instructions.map((step, i) => (
+              <View key={i} style={styles.instrRow}>
+                <View style={styles.instrDot} />
+                <Text style={styles.instrText}>{step}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </Animated.View>
+      )}
+
+      {/* Footer CTAs */}
+      <View style={styles.footer}>
+        {phase === "ready" && (
+          <Animated.View entering={FadeInDown.duration(400)} style={{ width: "100%", gap: 10 }}>
+            <Pressable style={styles.startBtn} onPress={handleStart}>
+              <Ionicons name="play" size={20} color={Colors.textInverted} />
+              <Text style={styles.startBtnText}>
+                Begin · {formatTime(duration)}
+              </Text>
+            </Pressable>
+            <Pressable style={styles.skipBtn} onPress={handleSkip}>
+              <Text style={styles.skipBtnText}>Cancel</Text>
+            </Pressable>
+          </Animated.View>
+        )}
+
+        {phase === "running" && (
+          <Animated.View entering={FadeIn.duration(300)} style={styles.runningHint}>
+            <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
+            <Text style={styles.runningHintText}>
+              Follow the orb — breathe with it
+            </Text>
+          </Animated.View>
+        )}
+
+        {phase === "done" && (
+          <Animated.View entering={FadeInDown.duration(500)} style={{ width: "100%", gap: 12 }}>
+            <View style={styles.doneRow}>
+              <Ionicons name="checkmark-circle" size={28} color={Colors.primary} />
+              <Text style={styles.doneTitle}>Great stretch!</Text>
+            </View>
+            {targetApp && (
+              <View style={styles.unlockNote}>
+                <Ionicons name="lock-open-outline" size={14} color={Colors.accent} />
+                <Text style={styles.unlockText}>{targetApp} is now unlocked</Text>
+              </View>
+            )}
+            <Pressable style={styles.completeBtn} onPress={handleComplete}>
+              <Ionicons name="checkmark" size={20} color={Colors.textInverted} />
+              <Text style={styles.completeBtnText}>Log & finish</Text>
+            </Pressable>
+          </Animated.View>
+        )}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+  container: {
+    flex: 1,
+    backgroundColor: Colors.bg,
+    alignItems: "center",
   },
-  closeBtn: {
+  headerRow: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  backBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: Colors.bgCard,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  timerText: {
-    fontSize: 28,
-    fontFamily: 'Inter_700Bold',
+  headerCenter: { flex: 1, alignItems: "center" },
+  headerTitle: {
+    fontSize: 15,
+    fontFamily: "DM_Sans_600SemiBold",
     color: Colors.text,
   },
-  activeProgressTrack: {
+  headerTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  headerTagText: {
+    fontSize: 11,
+    fontFamily: "DM_Sans_400Regular",
+    color: Colors.accent,
+  },
+  earlyBtn: {
+    width: 60,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+  },
+  earlyBtnText: {
+    fontSize: 14,
+    fontFamily: "DM_Sans_500Medium",
+    color: Colors.textSecondary,
+  },
+  progressWrap: { width: "100%", paddingHorizontal: 32, marginVertical: 6 },
+  progressTrackOuter: {
     height: 3,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderRadius: 2,
+    overflow: "hidden",
+    marginBottom: 6,
   },
-  activeProgressFill: {
-    height: '100%',
-    backgroundColor: Colors.primaryLight,
+  progressFill: {
+    height: "100%",
+    backgroundColor: Colors.primary,
+    borderRadius: 2,
   },
-  prepContent: {
+  timerLabel: {
+    fontSize: 13,
+    fontFamily: "DM_Sans_600SemiBold",
+    color: Colors.textSecondary,
+    textAlign: "center",
+  },
+  orbSection: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 24,
   },
-  prepIcon: {
-    width: 120,
-    height: 120,
-    borderRadius: 34,
-    backgroundColor: 'rgba(122, 184, 147, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
+  breathLabel: {
+    fontSize: 22,
+    fontFamily: "DM_Sans_600SemiBold",
+    color: Colors.textSecondary,
+    letterSpacing: -0.2,
   },
-  prepName: {
-    fontSize: 30,
-    fontFamily: 'Inter_700Bold',
-    color: Colors.text,
-    textAlign: 'center',
+  instrCard: {
+    width: "100%",
+    paddingHorizontal: 24,
     marginBottom: 10,
   },
-  prepDesc: {
-    fontSize: 15,
-    fontFamily: 'Inter_400Regular',
+  instrRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 7,
+  },
+  instrDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: Colors.primary,
+    marginTop: 8,
+    flexShrink: 0,
+  },
+  instrText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "DM_Sans_400Regular",
     color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 8,
+    lineHeight: 20,
   },
-  prepDuration: {
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
-    color: Colors.accentWarm,
-    marginBottom: 24,
-  },
-  prepFirstStep: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: 16,
-    width: '100%',
-  },
-  prepFirstStepLabel: {
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
-    color: Colors.primaryLight,
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  prepFirstStepText: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    color: Colors.text,
-    lineHeight: 21,
-  },
-  prepBottom: {
+  footer: {
+    width: "100%",
     paddingHorizontal: 24,
-    paddingBottom: 24,
-    gap: 12,
-  },
-  breathingHint: {
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
-    color: Colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 19,
+    paddingBottom: 10,
+    alignItems: "center",
   },
   startBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.softMint,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.primary,
     borderRadius: 16,
     paddingVertical: 16,
     gap: 10,
+    width: "100%",
   },
   startBtnText: {
     fontSize: 17,
-    fontFamily: 'Inter_700Bold',
-    color: Colors.primaryDeep,
+    fontFamily: "DM_Sans_700Bold",
+    color: Colors.textInverted,
   },
-  skipBtn: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
+  skipBtn: { alignItems: "center", paddingVertical: 10, width: "100%" },
   skipBtnText: {
     fontSize: 14,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: "DM_Sans_400Regular",
     color: Colors.textMuted,
   },
-  activeContent: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingHorizontal: 24,
-    paddingVertical: 20,
+  runningHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 14,
   },
-  orbContainer: {
-    alignItems: 'center',
-    gap: 20,
-  },
-  orbOuter: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: 'rgba(122, 184, 147, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  orbInner: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(122, 184, 147, 0.25)',
-  },
-  stretchNameActive: {
-    fontSize: 20,
-    fontFamily: 'Inter_600SemiBold',
-    color: Colors.text,
-    textAlign: 'center',
-  },
-  instructionCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 20,
-    padding: 20,
-    width: '100%',
-  },
-  stepLabel: {
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
-    color: Colors.primaryLight,
-    marginBottom: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  stepText: {
-    fontSize: 17,
-    fontFamily: 'Inter_500Medium',
-    color: Colors.text,
-    lineHeight: 26,
-  },
-  breathingCueBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(122,184,147,0.08)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  breathingCueText: {
+  runningHintText: {
     fontSize: 13,
-    fontFamily: 'Inter_400Regular',
-    color: Colors.textSecondary,
-    flex: 1,
+    fontFamily: "DM_Sans_400Regular",
+    color: Colors.textMuted,
   },
-  doneContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
-  doneCircle: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: Colors.softMint,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 28,
-  },
+  doneRow: { flexDirection: "row", alignItems: "center", gap: 10, justifyContent: "center" },
   doneTitle: {
-    fontSize: 32,
-    fontFamily: 'Inter_700Bold',
+    fontSize: 22,
+    fontFamily: "DM_Sans_700Bold",
     color: Colors.text,
-    textAlign: 'center',
-    marginBottom: 12,
   },
-  doneSub: {
-    fontSize: 16,
-    fontFamily: 'Inter_400Regular',
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 24,
-  },
-  unlockBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(200, 168, 107, 0.15)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginBottom: 32,
+  unlockNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: Colors.accentMuted,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    alignSelf: "center",
   },
   unlockText: {
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-    color: Colors.accentWarm,
+    fontSize: 13,
+    fontFamily: "DM_Sans_500Medium",
+    color: Colors.accent,
   },
-  doneBtns: { width: '100%', gap: 12 },
-  doneBtn: {
-    backgroundColor: Colors.softMint,
+  completeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.primary,
     borderRadius: 16,
     paddingVertical: 16,
-    alignItems: 'center',
+    gap: 10,
+    width: "100%",
   },
-  doneBtnText: {
+  completeBtnText: {
     fontSize: 17,
-    fontFamily: 'Inter_700Bold',
-    color: Colors.primaryDeep,
+    fontFamily: "DM_Sans_700Bold",
+    color: Colors.textInverted,
   },
 });
