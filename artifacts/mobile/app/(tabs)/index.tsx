@@ -18,7 +18,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
 import { DISTRACTING_APPS, getRandomStretch } from "@/constants/stretches";
@@ -58,9 +58,7 @@ function StartButton({ onPress }: { onPress: () => void }) {
 }
 
 export default function HomeScreen() {
-  const insets = useSafeAreaInsets();
   const { settings, todayCount, currentStreak, totalSessions } = useApp();
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
   const lockedApps = DISTRACTING_APPS.filter(a => settings.lockedApps.includes(a.id));
   const progress = Math.min(todayCount / (settings.dailyGoal || 3), 1);
   const goalMet = todayCount >= (settings.dailyGoal || 3);
@@ -73,7 +71,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: topPad }]}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
 
         {/* Header */}
@@ -193,7 +191,7 @@ export default function HomeScreen() {
 
         <View style={{ height: 110 }} />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 

@@ -1,14 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import {
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { useApp, StretchSession } from "@/context/AppContext";
 
@@ -133,9 +132,7 @@ function SessionRow({ session }: { session: StretchSession }) {
 }
 
 export default function ProgressScreen() {
-  const insets = useSafeAreaInsets();
   const { sessions, todayCount, currentStreak, totalSessions } = useApp();
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const thisWeek = sessions.filter(
     s => new Date(s.completedAt) > new Date(Date.now() - 7 * 86400000)
@@ -160,7 +157,7 @@ export default function ProgressScreen() {
   })();
 
   return (
-    <View style={[styles.container, { paddingTop: topPad }]}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView showsVerticalScrollIndicator={false}>
 
         <View style={styles.header}>
@@ -254,7 +251,7 @@ export default function ProgressScreen() {
 
         <View style={{ height: 110 }} />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 

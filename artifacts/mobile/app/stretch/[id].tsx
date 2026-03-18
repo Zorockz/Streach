@@ -13,6 +13,7 @@ import {
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
+import { StretchIcon } from "@/components/StretchIcon";
 import { STRETCHES, STRETCH_CATEGORIES } from "@/constants/stretches";
 
 export default function StretchDetailScreen() {
@@ -34,26 +35,28 @@ export default function StretchDetailScreen() {
   }
 
   const handleStart = async () => {
-    if (Platform.OS !== "web")
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (Platform.OS !== "web") await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push({ pathname: "/stretch/session", params: { stretchId: stretch.id } });
   };
 
   const d = stretch.durationSeconds;
-  const dLabel = d < 60 ? `${d}s` : `${Math.floor(d / 60)}m ${d % 60 > 0 ? (d % 60) + "s" : ""}`.trim();
+  const dLabel = d < 60 ? `${d}s` : `${Math.floor(d / 60)}m${d % 60 > 0 ? ` ${d % 60}s` : ""}`;
 
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom + 20 }]}>
+    <View style={[styles.container, { paddingBottom: insets.bottom + 16 }]}>
       <View style={styles.handle} />
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Hero */}
         <Animated.View entering={FadeIn.duration(350)} style={styles.hero}>
-          <View style={[styles.iconWrap, { backgroundColor: cat.bgColor }]}>
-            <Ionicons name={stretch.icon as any} size={54} color={cat.color} />
-          </View>
+          <StretchIcon
+            mciIcon={stretch.mciIcon}
+            size={56}
+            color={cat.color}
+            bgColor={cat.bgColor}
+            boxSize={100}
+            borderRadius={28}
+          />
 
-          {/* Badges */}
           <View style={styles.badges}>
             <View style={[styles.badge, { backgroundColor: cat.bgColor }]}>
               <Ionicons name={cat.icon as any} size={11} color={cat.color} />
@@ -63,10 +66,8 @@ export default function StretchDetailScreen() {
               <Ionicons name="time-outline" size={11} color={Colors.textSecondary} />
               <Text style={styles.badgeText}>{dLabel}</Text>
             </View>
-            <View style={[styles.badge, styles.badgeDiff]}>
-              <Text style={[styles.badgeText, { color: Colors.accent }]}>
-                {stretch.difficulty}
-              </Text>
+            <View style={[styles.badge, { backgroundColor: Colors.accentMuted }]}>
+              <Text style={[styles.badgeText, { color: Colors.accent }]}>{stretch.difficulty}</Text>
             </View>
           </View>
 
@@ -74,7 +75,6 @@ export default function StretchDetailScreen() {
           <Text style={styles.description}>{stretch.description}</Text>
         </Animated.View>
 
-        {/* Instructions */}
         {stretch.instructions.length > 0 && (
           <Animated.View entering={FadeInDown.duration(350).delay(80)} style={styles.section}>
             <Text style={styles.sectionLabel}>HOW TO DO IT</Text>
@@ -91,7 +91,6 @@ export default function StretchDetailScreen() {
           </Animated.View>
         )}
 
-        {/* Breathing cue */}
         <Animated.View entering={FadeInDown.duration(350).delay(140)} style={styles.section}>
           <Text style={styles.sectionLabel}>BREATHING CUE</Text>
           <View style={styles.cueBox}>
@@ -100,7 +99,6 @@ export default function StretchDetailScreen() {
           </View>
         </Animated.View>
 
-        {/* Tip */}
         {stretch.tip && (
           <Animated.View entering={FadeInDown.duration(350).delay(200)} style={styles.section}>
             <View style={styles.tipBox}>
@@ -113,7 +111,6 @@ export default function StretchDetailScreen() {
         <View style={{ height: 140 }} />
       </ScrollView>
 
-      {/* Sticky footer */}
       <Animated.View entering={FadeInDown.duration(350).delay(250)} style={styles.footer}>
         <Pressable style={styles.startBtn} onPress={handleStart}>
           <Ionicons name="play-circle-outline" size={22} color={Colors.white} />
@@ -131,39 +128,24 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bgCard },
   handle: {
     width: 36, height: 4, borderRadius: 2,
-    backgroundColor: Colors.divider,
-    alignSelf: "center", marginTop: 10, marginBottom: 4,
+    backgroundColor: Colors.divider, alignSelf: "center", marginTop: 10, marginBottom: 4,
   },
   hero: { padding: 24, alignItems: "flex-start" },
-  iconWrap: {
-    width: 96, height: 96, borderRadius: 28,
-    alignItems: "center", justifyContent: "center", marginBottom: 16,
-  },
-  badges: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 14 },
+  badges: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 16, marginBottom: 14 },
   badge: {
     flexDirection: "row", alignItems: "center", gap: 4,
-    backgroundColor: Colors.bgSurface, paddingHorizontal: 10,
-    paddingVertical: 5, borderRadius: 10,
+    backgroundColor: Colors.bgSurface, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10,
   },
-  badgeDiff: { backgroundColor: Colors.accentMuted },
-  badgeText: {
-    fontSize: 12, fontFamily: "DM_Sans_500Medium",
-    color: Colors.textSecondary, textTransform: "capitalize",
-  },
+  badgeText: { fontSize: 12, fontFamily: "DM_Sans_500Medium", color: Colors.textSecondary, textTransform: "capitalize" },
   name: {
-    fontSize: 30, fontFamily: "DM_Sans_700Bold",
-    color: Colors.text, letterSpacing: -0.4,
-    marginBottom: 10, lineHeight: 36,
+    fontSize: 30, fontFamily: "DM_Sans_700Bold", color: Colors.text,
+    letterSpacing: -0.4, marginBottom: 10, lineHeight: 36,
   },
-  description: {
-    fontSize: 16, fontFamily: "DM_Sans_400Regular",
-    color: Colors.textSecondary, lineHeight: 24,
-  },
+  description: { fontSize: 16, fontFamily: "DM_Sans_400Regular", color: Colors.textSecondary, lineHeight: 24 },
   section: { paddingHorizontal: 24, marginBottom: 20 },
   sectionLabel: {
-    fontSize: 11, fontFamily: "DM_Sans_600SemiBold",
-    color: Colors.textMuted, letterSpacing: 0.9,
-    textTransform: "uppercase", marginBottom: 12,
+    fontSize: 11, fontFamily: "DM_Sans_600SemiBold", color: Colors.textMuted,
+    letterSpacing: 0.9, textTransform: "uppercase", marginBottom: 12,
   },
   instrList: { gap: 10 },
   instrRow: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
@@ -172,26 +154,17 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
   instrNumText: { fontSize: 13, fontFamily: "DM_Sans_700Bold" },
-  instrText: {
-    flex: 1, fontSize: 15, fontFamily: "DM_Sans_400Regular",
-    color: Colors.text, lineHeight: 22, paddingTop: 2,
-  },
+  instrText: { flex: 1, fontSize: 15, fontFamily: "DM_Sans_400Regular", color: Colors.text, lineHeight: 22, paddingTop: 2 },
   cueBox: {
     flexDirection: "row", alignItems: "flex-start", gap: 10,
     backgroundColor: Colors.primaryMuted, borderRadius: 12, padding: 14,
   },
-  cueText: {
-    flex: 1, fontSize: 14, fontFamily: "DM_Sans_400Regular",
-    color: Colors.textSecondary, lineHeight: 21,
-  },
+  cueText: { flex: 1, fontSize: 14, fontFamily: "DM_Sans_400Regular", color: Colors.textSecondary, lineHeight: 21 },
   tipBox: {
     flexDirection: "row", alignItems: "flex-start", gap: 10,
     backgroundColor: Colors.accentMuted, borderRadius: 12, padding: 14,
   },
-  tipText: {
-    flex: 1, fontSize: 14, fontFamily: "DM_Sans_400Regular",
-    color: Colors.textSecondary, lineHeight: 21,
-  },
+  tipText: { flex: 1, fontSize: 14, fontFamily: "DM_Sans_400Regular", color: Colors.textSecondary, lineHeight: 21 },
   footer: {
     position: "absolute", bottom: 0, left: 0, right: 0,
     backgroundColor: Colors.bgCard, padding: 20,

@@ -22,8 +22,9 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
+import { StretchIcon } from "@/components/StretchIcon";
 import { STRETCHES, STRETCH_CATEGORIES, getRandomStretch } from "@/constants/stretches";
 import { useApp } from "@/context/AppContext";
 
@@ -31,12 +32,7 @@ type Phase = "ready" | "running" | "done";
 type Breath = "in" | "hold" | "out";
 
 const BREATH_CYCLE = { in: 4000, hold: 2000, out: 5000 };
-
-const BREATH_LABEL: Record<Breath, string> = {
-  in: "Breathe in",
-  hold: "Hold",
-  out: "Breathe out",
-};
+const BREATH_LABEL: Record<Breath, string> = { in: "Breathe in", hold: "Hold", out: "Breathe out" };
 
 function BreathingOrb({ isRunning, phase }: { isRunning: boolean; phase: Breath }) {
   const scale = useSharedValue(1);
@@ -53,16 +49,14 @@ function BreathingOrb({ isRunning, phase }: { isRunning: boolean; phase: Breath 
         withTiming(1.35, { duration: BREATH_CYCLE.in, easing: Easing.inOut(Easing.ease) }),
         withTiming(1.35, { duration: BREATH_CYCLE.hold }),
         withTiming(1, { duration: BREATH_CYCLE.out, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1, false
+      ), -1, false
     );
     opacity.value = withRepeat(
       withSequence(
-        withTiming(0.7, { duration: BREATH_CYCLE.in, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.7, { duration: BREATH_CYCLE.in }),
         withTiming(0.7, { duration: BREATH_CYCLE.hold }),
-        withTiming(0.3, { duration: BREATH_CYCLE.out, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1, false
+        withTiming(0.3, { duration: BREATH_CYCLE.out })
+      ), -1, false
     );
   }, [isRunning]);
 
@@ -76,20 +70,19 @@ function BreathingOrb({ isRunning, phase }: { isRunning: boolean; phase: Breath 
     opacity: interpolate(scale.value, [1, 1.35], [0.1, 0.22]),
   }));
 
-  const color = isRunning
+  const fillColor = isRunning
     ? phase === "in" ? Colors.primary
-    : phase === "hold" ? Colors.primaryDark
-    : Colors.bgSurface
+      : phase === "hold" ? Colors.primaryDark
+      : Colors.bgSurface
     : Colors.bgCard;
 
   return (
     <View style={orb.wrap}>
-      <Animated.View style={[orb.outer, outerStyle, { backgroundColor: Colors.primary }]} />
-      <Animated.View style={[orb.inner, innerStyle, { backgroundColor: color }]} />
-      <View style={orb.icon} pointerEvents="none">
+      <Animated.View style={[orb.outer, outerStyle]} />
+      <Animated.View style={[orb.inner, innerStyle, { backgroundColor: fillColor }]} />
+      <View style={orb.iconWrap} pointerEvents="none">
         <Ionicons
-          name="body-outline"
-          size={34}
+          name="body-outline" size={36}
           color={isRunning && phase !== "out" ? Colors.white : Colors.textSecondary}
         />
       </View>
@@ -106,12 +99,11 @@ const orb = StyleSheet.create({
   inner: {
     position: "absolute", width: 160, height: 160, borderRadius: 80,
   },
-  icon: { position: "absolute", alignItems: "center", justifyContent: "center" },
+  iconWrap: { position: "absolute", alignItems: "center", justifyContent: "center" },
 });
 
 export default function StretchSessionScreen() {
   const { stretchId, targetApp } = useLocalSearchParams<{ stretchId?: string; targetApp?: string }>();
-  const insets = useSafeAreaInsets();
   const { recordSession } = useApp();
 
   const stretch = stretchId ? STRETCHES.find(s => s.id === stretchId) : getRandomStretch();
@@ -148,8 +140,7 @@ export default function StretchSessionScreen() {
   }, []);
 
   const handleStart = async () => {
-    if (Platform.OS !== "web")
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (Platform.OS !== "web") await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setPhase("running");
     setElapsed(0);
     startTimeRef.current = Date.now();
@@ -160,8 +151,7 @@ export default function StretchSessionScreen() {
       if (el >= duration) {
         clearTimers();
         setPhase("done");
-        if (Platform.OS !== "web")
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     }, 500);
   };
@@ -180,8 +170,7 @@ export default function StretchSessionScreen() {
   const handleEarlyDone = () => {
     clearTimers();
     setPhase("done");
-    if (Platform.OS !== "web")
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   useEffect(() => () => clearTimers(), []);
@@ -194,18 +183,14 @@ export default function StretchSessionScreen() {
 
   if (!stretch) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <Text style={{ color: Colors.text }}>Stretch not found</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={[
-      styles.container,
-      { paddingTop: Platform.OS === "web" ? 67 : insets.top,
-        paddingBottom: Platform.OS === "web" ? 34 : insets.bottom }
-    ]}>
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <StatusBar barStyle="dark-content" />
 
       {/* Header */}
@@ -229,27 +214,32 @@ export default function StretchSessionScreen() {
         ) : <View style={{ width: 72 }} />}
       </View>
 
-      {/* Category chip */}
-      {cat && (
-        <View style={styles.catRow}>
+      {/* Category + timer */}
+      <View style={styles.subHeader}>
+        {cat && (
           <View style={[styles.catChip, { backgroundColor: cat.bgColor }]}>
-            <Ionicons name={cat.icon as any} size={12} color={cat.color} />
+            <StretchIcon mciIcon={cat.mciIcon} size={13} color={cat.color} bgColor="transparent" boxSize={16} />
             <Text style={[styles.catChipText, { color: cat.color }]}>{cat.label}</Text>
+          </View>
+        )}
+        {phase === "running" && (
+          <Animated.View entering={FadeIn.duration(300)} style={styles.timerChip}>
+            <Ionicons name="time-outline" size={12} color={Colors.textSecondary} />
+            <Text style={styles.timerChipText}>{formatTime(remaining)}</Text>
+          </Animated.View>
+        )}
+      </View>
+
+      {/* Progress bar */}
+      {phase === "running" && (
+        <View style={styles.progressWrap}>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
           </View>
         </View>
       )}
 
-      {/* Progress bar */}
-      {phase === "running" && (
-        <Animated.View entering={FadeIn.duration(300)} style={styles.progressWrap}>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-          </View>
-          <Text style={styles.timerText}>{formatTime(remaining)}</Text>
-        </Animated.View>
-      )}
-
-      {/* Orb section */}
+      {/* Orb */}
       <View style={styles.orbSection}>
         <BreathingOrb isRunning={phase === "running"} phase={breathPhase} />
         <Animated.Text
@@ -260,21 +250,19 @@ export default function StretchSessionScreen() {
             phase === "done" && { color: Colors.primary, fontFamily: "DM_Sans_700Bold" },
           ]}
         >
-          {phase === "ready"
-            ? "Tap below to begin"
-            : phase === "done"
-            ? "Well done!"
+          {phase === "ready" ? "Tap below to begin"
+            : phase === "done" ? "Well done!"
             : BREATH_LABEL[breathPhase]}
         </Animated.Text>
       </View>
 
-      {/* Step instructions */}
+      {/* Instruction cards */}
       {stretch.instructions.length > 0 && phase !== "done" && (
         <View style={styles.instrWrap}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }}>
             {stretch.instructions.map((step, i) => (
               <View key={i} style={styles.instrCard}>
-                <Text style={styles.instrNum}>{i + 1}</Text>
+                <Text style={styles.instrNumText}>{i + 1}</Text>
                 <Text style={styles.instrText}>{step}</Text>
               </View>
             ))}
@@ -295,14 +283,12 @@ export default function StretchSessionScreen() {
             </Pressable>
           </Animated.View>
         )}
-
         {phase === "running" && (
-          <Animated.View entering={FadeIn.duration(300)} style={styles.runHint}>
+          <View style={styles.runHint}>
             <Ionicons name="leaf-outline" size={14} color={Colors.textMuted} />
             <Text style={styles.runHintText}>Follow the orb · breathe with it</Text>
-          </Animated.View>
+          </View>
         )}
-
         {phase === "done" && (
           <Animated.View entering={FadeInDown.duration(450)} style={{ gap: 12, width: "100%" }}>
             {targetApp && (
@@ -318,7 +304,7 @@ export default function StretchSessionScreen() {
           </Animated.View>
         )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -339,33 +325,39 @@ const styles = StyleSheet.create({
   headerTagText: { fontSize: 11, fontFamily: "DM_Sans_400Regular", color: Colors.accent },
   earlyBtn: { width: 72, alignItems: "flex-end" },
   earlyBtnText: { fontSize: 13, fontFamily: "DM_Sans_500Medium", color: Colors.textSecondary },
-  catRow: { width: "100%", paddingHorizontal: 16, marginBottom: 6 },
+  subHeader: {
+    width: "100%", paddingHorizontal: 16, flexDirection: "row",
+    alignItems: "center", gap: 8, marginBottom: 6,
+  },
   catChip: {
-    alignSelf: "center", flexDirection: "row", alignItems: "center",
+    flexDirection: "row", alignItems: "center",
     gap: 5, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14,
   },
   catChipText: { fontSize: 12, fontFamily: "DM_Sans_500Medium" },
-  progressWrap: { width: "100%", paddingHorizontal: 28, marginBottom: 8 },
-  progressTrack: {
-    height: 3, backgroundColor: Colors.bgSurface,
-    borderRadius: 2, overflow: "hidden", marginBottom: 6,
+  timerChip: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: Colors.bgCard, paddingHorizontal: 10,
+    paddingVertical: 5, borderRadius: 14,
+    borderWidth: 1, borderColor: Colors.divider,
   },
+  timerChipText: { fontSize: 13, fontFamily: "DM_Sans_600SemiBold", color: Colors.textSecondary },
+  progressWrap: { width: "100%", paddingHorizontal: 20, marginBottom: 4 },
+  progressTrack: { height: 3, backgroundColor: Colors.bgSurface, borderRadius: 2, overflow: "hidden" },
   progressFill: { height: "100%", backgroundColor: Colors.primary, borderRadius: 2 },
-  timerText: { fontSize: 13, fontFamily: "DM_Sans_600SemiBold", color: Colors.textSecondary, textAlign: "center" },
-  orbSection: { flex: 1, alignItems: "center", justifyContent: "center", gap: 22 },
+  orbSection: { flex: 1, alignItems: "center", justifyContent: "center", gap: 24 },
   breathLabel: {
     fontSize: 22, fontFamily: "DM_Sans_600SemiBold",
     color: Colors.textSecondary, letterSpacing: -0.2,
   },
   instrWrap: { width: "100%", paddingLeft: 20, marginBottom: 8 },
   instrCard: {
-    backgroundColor: Colors.bgCard, borderRadius: 12,
-    padding: 12, marginRight: 10, width: 200,
+    backgroundColor: Colors.bgCard, borderRadius: 12, padding: 12,
+    marginRight: 10, width: 200,
     borderWidth: 1, borderColor: Colors.divider,
   },
-  instrNum: { fontSize: 11, fontFamily: "DM_Sans_700Bold", color: Colors.primary, marginBottom: 4 },
+  instrNumText: { fontSize: 11, fontFamily: "DM_Sans_700Bold", color: Colors.primary, marginBottom: 4 },
   instrText: { fontSize: 12, fontFamily: "DM_Sans_400Regular", color: Colors.textSecondary, lineHeight: 17 },
-  footer: { width: "100%", paddingHorizontal: 24, paddingBottom: 10, alignItems: "center" },
+  footer: { width: "100%", paddingHorizontal: 24, paddingBottom: 8, alignItems: "center" },
   startBtn: {
     flexDirection: "row", alignItems: "center",
     justifyContent: "center", backgroundColor: Colors.primary,
@@ -375,8 +367,7 @@ const styles = StyleSheet.create({
   cancelBtn: { alignItems: "center", paddingVertical: 10, width: "100%" },
   cancelBtnText: { fontSize: 14, fontFamily: "DM_Sans_400Regular", color: Colors.textMuted },
   runHint: {
-    flexDirection: "row", alignItems: "center",
-    gap: 6, paddingVertical: 14,
+    flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 14,
   },
   runHintText: { fontSize: 13, fontFamily: "DM_Sans_400Regular", color: Colors.textMuted },
   unlockBadge: {

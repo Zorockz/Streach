@@ -1,12 +1,12 @@
 export type BodyArea = 'neck' | 'shoulders' | 'back' | 'wrists' | 'hips' | 'full';
-
 export type StretchDifficulty = 'easy' | 'medium' | 'hard';
 
 export interface StretchCategory {
   id: BodyArea;
   label: string;
   description: string;
-  icon: string;
+  icon: string;      // Ionicons name (used in UI chips, nav)
+  mciIcon: string;   // MaterialCommunityIcons name (used for body-pose icons)
   color: string;
   bgColor: string;
 }
@@ -19,7 +19,7 @@ export interface Stretch {
   bodyArea: BodyArea[];
   durationSeconds: number;
   difficulty: StretchDifficulty;
-  icon: string;
+  mciIcon: string;   // MaterialCommunityIcons pose icon
   breathingCue: string;
   tip?: string;
 }
@@ -30,6 +30,7 @@ export const STRETCH_CATEGORIES: StretchCategory[] = [
     label: 'Neck & Head',
     description: 'Relieve tension from screen time',
     icon: 'person-outline',
+    mciIcon: 'head-dots-horizontal-outline',
     color: '#4A90A4',
     bgColor: 'rgba(74, 144, 164, 0.12)',
   },
@@ -38,6 +39,7 @@ export const STRETCH_CATEGORIES: StretchCategory[] = [
     label: 'Shoulders & Arms',
     description: 'Release shoulder strain',
     icon: 'body-outline',
+    mciIcon: 'arm-flex-outline',
     color: '#7B68B0',
     bgColor: 'rgba(123, 104, 176, 0.12)',
   },
@@ -46,6 +48,7 @@ export const STRETCH_CATEGORIES: StretchCategory[] = [
     label: 'Back & Spine',
     description: 'Decompress and realign',
     icon: 'fitness-outline',
+    mciIcon: 'yoga',
     color: '#3A7A5C',
     bgColor: 'rgba(58, 122, 92, 0.12)',
   },
@@ -54,6 +57,7 @@ export const STRETCH_CATEGORIES: StretchCategory[] = [
     label: 'Wrists & Hands',
     description: 'Undo phone-induced stiffness',
     icon: 'hand-left-outline',
+    mciIcon: 'hand-wave-outline',
     color: '#D4874A',
     bgColor: 'rgba(212, 135, 74, 0.12)',
   },
@@ -62,6 +66,7 @@ export const STRETCH_CATEGORIES: StretchCategory[] = [
     label: 'Hips & Legs',
     description: 'Counter sitting all day',
     icon: 'walk-outline',
+    mciIcon: 'human-handsup',
     color: '#B05A6A',
     bgColor: 'rgba(176, 90, 106, 0.12)',
   },
@@ -70,16 +75,17 @@ export const STRETCH_CATEGORIES: StretchCategory[] = [
     label: 'Full Body',
     description: 'Complete reset from head to toe',
     icon: 'pulse-outline',
+    mciIcon: 'human-greeting-variant',
     color: '#5D8A38',
     bgColor: 'rgba(93, 138, 56, 0.12)',
   },
 ];
 
-// Alias for backwards compat
 export const BODY_AREAS = STRETCH_CATEGORIES.map(c => ({
   id: c.id,
   label: c.label.split(' ')[0],
   icon: c.icon,
+  mciIcon: c.mciIcon,
   description: c.description,
 }));
 
@@ -100,7 +106,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['neck'],
     durationSeconds: 30,
     difficulty: 'easy',
-    icon: 'refresh-outline',
+    mciIcon: 'rotate-3d-variant',
     breathingCue: 'Breathe deeply and slowly with each movement',
     tip: 'Keep the movement slow — rushing causes strain. Half circles are fine if full rolls feel uncomfortable.',
   },
@@ -119,7 +125,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['neck'],
     durationSeconds: 25,
     difficulty: 'easy',
-    icon: 'arrow-back-outline',
+    mciIcon: 'head-dots-horizontal',
     breathingCue: 'Exhale as you tuck your chin',
     tip: 'Imagine you are making a "double chin" — that is exactly the right movement.',
   },
@@ -137,7 +143,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['neck'],
     durationSeconds: 30,
     difficulty: 'easy',
-    icon: 'remove-outline',
+    mciIcon: 'human-greeting',
     breathingCue: 'Breathe into the left side of your neck as you tilt right',
     tip: 'Never pull — let gravity and gentle hand weight do the work.',
   },
@@ -157,7 +163,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['shoulders'],
     durationSeconds: 30,
     difficulty: 'easy',
-    icon: 'sync-outline',
+    mciIcon: 'arm-flex-outline',
     breathingCue: 'Inhale as shoulders rise, exhale as they fall',
     tip: 'Exaggerate the movement — most people roll too small.',
   },
@@ -175,7 +181,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['shoulders'],
     durationSeconds: 35,
     difficulty: 'easy',
-    icon: 'swap-horizontal-outline',
+    mciIcon: 'arm-flex',
     breathingCue: 'Take slow, even breaths throughout the stretch',
     tip: 'Keep the arm at shoulder height — too high or low misses the target muscle.',
   },
@@ -193,7 +199,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['shoulders'],
     durationSeconds: 35,
     difficulty: 'easy',
-    icon: 'arrow-up-outline',
+    mciIcon: 'human-handsup',
     breathingCue: 'Breathe into your ribcage as you stretch upward',
     tip: 'Let the elbow point straight up — a drooping elbow reduces the stretch.',
   },
@@ -213,7 +219,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['back'],
     durationSeconds: 35,
     difficulty: 'easy',
-    icon: 'trending-up-outline',
+    mciIcon: 'yoga',
     breathingCue: 'Inhale to arch, exhale to round — breath drives the movement',
     tip: 'If on a chair, grip your knees and push your chest forward for the Cow pose.',
   },
@@ -232,7 +238,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['back'],
     durationSeconds: 40,
     difficulty: 'easy',
-    icon: 'repeat-outline',
+    mciIcon: 'seat-recline-normal',
     breathingCue: 'Exhale to twist deeper, inhale to grow taller',
     tip: 'Twist from the waist — not from the neck. Lead with your ribcage.',
   },
@@ -250,7 +256,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['back', 'shoulders'],
     durationSeconds: 40,
     difficulty: 'easy',
-    icon: 'expand-outline',
+    mciIcon: 'human-greeting-variant',
     breathingCue: 'Each inhale expands and opens your chest further',
     tip: 'This is a relief — not a crunch. Do not force it. Let gravity do the work.',
   },
@@ -270,7 +276,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['wrists'],
     durationSeconds: 25,
     difficulty: 'easy',
-    icon: 'radio-button-on-outline',
+    mciIcon: 'hand-pointing-up',
     breathingCue: 'Breathe normally and keep your shoulders relaxed',
     tip: 'Make the circles as large as possible for full range-of-motion benefit.',
   },
@@ -289,7 +295,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['wrists'],
     durationSeconds: 30,
     difficulty: 'easy',
-    icon: 'hand-left-outline',
+    mciIcon: 'hand-okay',
     breathingCue: 'Breathe deeply throughout the stretch',
     tip: 'You can also reverse this — fingertips pointing down — to stretch the opposite side.',
   },
@@ -308,7 +314,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['wrists'],
     durationSeconds: 25,
     difficulty: 'easy',
-    icon: 'hand-right-outline',
+    mciIcon: 'hand-wave',
     breathingCue: 'Inhale as you fan, exhale as you close',
     tip: 'You can do this during phone calls or meetings — no one will notice.',
   },
@@ -329,7 +335,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['hips'],
     durationSeconds: 40,
     difficulty: 'medium',
-    icon: 'walk-outline',
+    mciIcon: 'walk',
     breathingCue: 'Breathe into the stretch on each exhale',
     tip: 'Keep your front knee over your ankle — not pushed past your toes.',
   },
@@ -348,7 +354,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['hips'],
     durationSeconds: 45,
     difficulty: 'easy',
-    icon: 'git-network-outline',
+    mciIcon: 'seat-recline-extra',
     breathingCue: 'Slow, deep breaths help relax the hip muscles',
     tip: 'The further you lean forward, the more intense the stretch in your glute.',
   },
@@ -367,7 +373,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['hips'],
     durationSeconds: 40,
     difficulty: 'easy',
-    icon: 'man-outline',
+    mciIcon: 'human-male',
     breathingCue: 'Steady breaths — let your body soften into the stretch',
     tip: 'If balance is difficult, lightly touch a wall. Do not arch your lower back.',
   },
@@ -388,7 +394,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['full', 'shoulders', 'back'],
     durationSeconds: 30,
     difficulty: 'easy',
-    icon: 'arrow-up-outline',
+    mciIcon: 'human-handsup',
     breathingCue: 'Inhale to reach up, exhale to release',
     tip: 'Do this 3–4 times for maximum effect. Great first thing in the morning.',
   },
@@ -407,7 +413,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['full', 'back'],
     durationSeconds: 35,
     difficulty: 'easy',
-    icon: 'code-outline',
+    mciIcon: 'human-male-height',
     breathingCue: 'Breathe into the stretching side of your ribcage',
     tip: 'Reach long through the fingertips — the length creates the stretch.',
   },
@@ -426,7 +432,7 @@ export const STRETCHES: Stretch[] = [
     bodyArea: ['full', 'back', 'hips'],
     durationSeconds: 40,
     difficulty: 'easy',
-    icon: 'chevron-down-outline',
+    mciIcon: 'yoga',
     breathingCue: 'Each exhale lets you soften and release a little more',
     tip: 'Do not try to touch the floor. Just let everything hang — that is enough.',
   },
