@@ -13,14 +13,16 @@ import {
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
-import { STRETCHES } from "@/constants/stretches";
+import { STRETCHES, STRETCH_CATEGORIES } from "@/constants/stretches";
 
 export default function StretchDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const stretch = STRETCHES.find((s) => s.id === id);
+  const stretch = STRETCHES.find(s => s.id === id);
+  const primaryArea = stretch?.bodyArea[0];
+  const cat = STRETCH_CATEGORIES.find(c => c.id === primaryArea);
 
-  if (!stretch) {
+  if (!stretch || !cat) {
     return (
       <View style={styles.error}>
         <Text style={styles.errorText}>Stretch not found</Text>
@@ -37,54 +39,50 @@ export default function StretchDetailScreen() {
     router.push({ pathname: "/stretch/session", params: { stretchId: stretch.id } });
   };
 
-  const duration = stretch.durationSeconds;
-  const mins = Math.floor(duration / 60);
-  const secs = duration % 60;
-  const durationStr =
-    mins > 0 ? `${mins}m ${secs > 0 ? secs + "s" : ""}`.trim() : `${secs}s`;
+  const d = stretch.durationSeconds;
+  const dLabel = d < 60 ? `${d}s` : `${Math.floor(d / 60)}m ${d % 60 > 0 ? (d % 60) + "s" : ""}`.trim();
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom + 20 }]}>
-      {/* Dismiss handle */}
       <View style={styles.handle} />
 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Hero */}
-        <Animated.View entering={FadeIn.duration(400)} style={styles.hero}>
-          <View style={styles.iconWrap}>
-            <Ionicons name={stretch.icon as any} size={56} color={Colors.primary} />
+        <Animated.View entering={FadeIn.duration(350)} style={styles.hero}>
+          <View style={[styles.iconWrap, { backgroundColor: cat.bgColor }]}>
+            <Ionicons name={stretch.icon as any} size={54} color={cat.color} />
           </View>
-          <View style={styles.heroBadges}>
-            <View style={styles.badge}>
-              <Ionicons name="time-outline" size={13} color={Colors.textSecondary} />
-              <Text style={styles.badgeText}>{durationStr}</Text>
+
+          {/* Badges */}
+          <View style={styles.badges}>
+            <View style={[styles.badge, { backgroundColor: cat.bgColor }]}>
+              <Ionicons name={cat.icon as any} size={11} color={cat.color} />
+              <Text style={[styles.badgeText, { color: cat.color }]}>{cat.label}</Text>
             </View>
-            {stretch.bodyArea.map((a) => (
-              <View key={a} style={[styles.badge, styles.badgeArea]}>
-                <Text style={styles.badgeText}>{a}</Text>
-              </View>
-            ))}
-            {stretch.difficulty && (
-              <View style={[styles.badge, styles.badgeDiff]}>
-                <Text style={[styles.badgeText, { color: Colors.accent }]}>
-                  {stretch.difficulty}
-                </Text>
-              </View>
-            )}
+            <View style={styles.badge}>
+              <Ionicons name="time-outline" size={11} color={Colors.textSecondary} />
+              <Text style={styles.badgeText}>{dLabel}</Text>
+            </View>
+            <View style={[styles.badge, styles.badgeDiff]}>
+              <Text style={[styles.badgeText, { color: Colors.accent }]}>
+                {stretch.difficulty}
+              </Text>
+            </View>
           </View>
+
           <Text style={styles.name}>{stretch.name}</Text>
           <Text style={styles.description}>{stretch.description}</Text>
         </Animated.View>
 
         {/* Instructions */}
-        {stretch.instructions && stretch.instructions.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-            <Text style={styles.sectionTitle}>How to do it</Text>
+        {stretch.instructions.length > 0 && (
+          <Animated.View entering={FadeInDown.duration(350).delay(80)} style={styles.section}>
+            <Text style={styles.sectionLabel}>HOW TO DO IT</Text>
             <View style={styles.instrList}>
               {stretch.instructions.map((step, i) => (
                 <View key={i} style={styles.instrRow}>
-                  <View style={styles.instrNum}>
-                    <Text style={styles.instrNumText}>{i + 1}</Text>
+                  <View style={[styles.instrNum, { backgroundColor: cat.bgColor }]}>
+                    <Text style={[styles.instrNumText, { color: cat.color }]}>{i + 1}</Text>
                   </View>
                   <Text style={styles.instrText}>{step}</Text>
                 </View>
@@ -93,22 +91,33 @@ export default function StretchDetailScreen() {
           </Animated.View>
         )}
 
-        {/* Tips */}
+        {/* Breathing cue */}
+        <Animated.View entering={FadeInDown.duration(350).delay(140)} style={styles.section}>
+          <Text style={styles.sectionLabel}>BREATHING CUE</Text>
+          <View style={styles.cueBox}>
+            <Ionicons name="water-outline" size={16} color={Colors.primary} />
+            <Text style={styles.cueText}>{stretch.breathingCue}</Text>
+          </View>
+        </Animated.View>
+
+        {/* Tip */}
         {stretch.tip && (
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.tipBox}>
-            <Ionicons name="bulb-outline" size={16} color={Colors.accent} />
-            <Text style={styles.tipText}>{stretch.tip}</Text>
+          <Animated.View entering={FadeInDown.duration(350).delay(200)} style={styles.section}>
+            <View style={styles.tipBox}>
+              <Ionicons name="bulb-outline" size={16} color={Colors.accent} />
+              <Text style={styles.tipText}>{stretch.tip}</Text>
+            </View>
           </Animated.View>
         )}
 
         <View style={{ height: 140 }} />
       </ScrollView>
 
-      {/* Sticky CTA */}
-      <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.footer}>
+      {/* Sticky footer */}
+      <Animated.View entering={FadeInDown.duration(350).delay(250)} style={styles.footer}>
         <Pressable style={styles.startBtn} onPress={handleStart}>
-          <Ionicons name="play-circle-outline" size={22} color={Colors.textInverted} />
-          <Text style={styles.startBtnText}>Start Stretch · {durationStr}</Text>
+          <Ionicons name="play-circle-outline" size={22} color={Colors.white} />
+          <Text style={styles.startBtnText}>Start Stretch · {dLabel}</Text>
         </Pressable>
         <Pressable style={styles.closeBtn} onPress={() => router.back()}>
           <Text style={styles.closeBtnText}>Close</Text>
@@ -119,143 +128,83 @@ export default function StretchDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bgSurface },
+  container: { flex: 1, backgroundColor: Colors.bgCard },
   handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignSelf: "center",
-    marginTop: 10,
-    marginBottom: 4,
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: Colors.divider,
+    alignSelf: "center", marginTop: 10, marginBottom: 4,
   },
   hero: { padding: 24, alignItems: "flex-start" },
   iconWrap: {
-    width: 96,
-    height: 96,
-    borderRadius: 28,
-    backgroundColor: Colors.primaryMuted,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
+    width: 96, height: 96, borderRadius: 28,
+    alignItems: "center", justifyContent: "center", marginBottom: 16,
   },
-  heroBadges: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 14 },
+  badges: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 14 },
   badge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: Colors.bgCard,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: Colors.bgSurface, paddingHorizontal: 10,
+    paddingVertical: 5, borderRadius: 10,
   },
-  badgeArea: { backgroundColor: Colors.primaryMuted },
   badgeDiff: { backgroundColor: Colors.accentMuted },
   badgeText: {
-    fontSize: 12,
-    fontFamily: "DM_Sans_500Medium",
-    color: Colors.textSecondary,
-    textTransform: "capitalize",
+    fontSize: 12, fontFamily: "DM_Sans_500Medium",
+    color: Colors.textSecondary, textTransform: "capitalize",
   },
   name: {
-    fontSize: 30,
-    fontFamily: "DM_Sans_700Bold",
-    color: Colors.text,
-    letterSpacing: -0.4,
-    marginBottom: 10,
-    lineHeight: 36,
+    fontSize: 30, fontFamily: "DM_Sans_700Bold",
+    color: Colors.text, letterSpacing: -0.4,
+    marginBottom: 10, lineHeight: 36,
   },
   description: {
-    fontSize: 16,
-    fontFamily: "DM_Sans_400Regular",
-    color: Colors.textSecondary,
-    lineHeight: 24,
+    fontSize: 16, fontFamily: "DM_Sans_400Regular",
+    color: Colors.textSecondary, lineHeight: 24,
   },
   section: { paddingHorizontal: 24, marginBottom: 20 },
-  sectionTitle: {
-    fontSize: 11,
-    fontFamily: "DM_Sans_600SemiBold",
-    color: Colors.textMuted,
-    marginBottom: 14,
-    textTransform: "uppercase",
-    letterSpacing: 1,
+  sectionLabel: {
+    fontSize: 11, fontFamily: "DM_Sans_600SemiBold",
+    color: Colors.textMuted, letterSpacing: 0.9,
+    textTransform: "uppercase", marginBottom: 12,
   },
-  instrList: { gap: 12 },
-  instrRow: {
-    flexDirection: "row",
-    gap: 14,
-    alignItems: "flex-start",
-  },
+  instrList: { gap: 10 },
+  instrRow: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   instrNum: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    backgroundColor: Colors.primaryMuted,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
+    width: 26, height: 26, borderRadius: 8,
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
-  instrNumText: {
-    fontSize: 13,
-    fontFamily: "DM_Sans_700Bold",
-    color: Colors.primary,
-  },
+  instrNumText: { fontSize: 13, fontFamily: "DM_Sans_700Bold" },
   instrText: {
-    flex: 1,
-    fontSize: 15,
-    fontFamily: "DM_Sans_400Regular",
-    color: Colors.text,
-    lineHeight: 22,
-    paddingTop: 2,
+    flex: 1, fontSize: 15, fontFamily: "DM_Sans_400Regular",
+    color: Colors.text, lineHeight: 22, paddingTop: 2,
+  },
+  cueBox: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    backgroundColor: Colors.primaryMuted, borderRadius: 12, padding: 14,
+  },
+  cueText: {
+    flex: 1, fontSize: 14, fontFamily: "DM_Sans_400Regular",
+    color: Colors.textSecondary, lineHeight: 21,
   },
   tipBox: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    marginHorizontal: 24,
-    backgroundColor: Colors.accentMuted,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 20,
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    backgroundColor: Colors.accentMuted, borderRadius: 12, padding: 14,
   },
   tipText: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: "DM_Sans_400Regular",
-    color: Colors.textSecondary,
-    lineHeight: 21,
+    flex: 1, fontSize: 14, fontFamily: "DM_Sans_400Regular",
+    color: Colors.textSecondary, lineHeight: 21,
   },
   footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: Colors.bgSurface,
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: Colors.divider,
-    gap: 10,
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    backgroundColor: Colors.bgCard, padding: 20,
+    borderTopWidth: 1, borderTopColor: Colors.divider, gap: 10,
   },
   startBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.primary,
-    borderRadius: 16,
-    paddingVertical: 16,
-    gap: 10,
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "center", backgroundColor: Colors.primary,
+    borderRadius: 16, paddingVertical: 16, gap: 10,
   },
-  startBtnText: {
-    fontSize: 17,
-    fontFamily: "DM_Sans_700Bold",
-    color: Colors.textInverted,
-  },
+  startBtnText: { fontSize: 17, fontFamily: "DM_Sans_700Bold", color: Colors.white },
   closeBtn: { alignItems: "center", paddingVertical: 8 },
-  closeBtnText: {
-    fontSize: 14,
-    fontFamily: "DM_Sans_400Regular",
-    color: Colors.textMuted,
-  },
+  closeBtnText: { fontSize: 14, fontFamily: "DM_Sans_400Regular", color: Colors.textMuted },
   error: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: Colors.bg },
   errorText: { fontSize: 18, fontFamily: "DM_Sans_500Medium", color: Colors.text },
   errorBack: { marginTop: 12 },

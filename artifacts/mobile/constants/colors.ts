@@ -1,46 +1,56 @@
 export const Colors = {
-  // Backgrounds
-  bg: '#0D1F1A',
-  bgSurface: '#162920',
-  bgCard: '#1C3429',
-  bgCardAlt: '#1A2F27',
-  bgInverted: '#F2EFE9',
+  // Backgrounds — warm sand/linen
+  bg: '#F4ECE1',
+  bgSurface: '#EDE3D4',
+  bgCard: '#FFFFFF',
+  bgCardAlt: '#FAF5EE',
+  bgInverted: '#1A2E22',
 
-  // Primary — sage/mint green
-  primary: '#5DB483',
-  primaryLight: '#7ECBA0',
-  primaryMuted: 'rgba(93, 180, 131, 0.18)',
-  primaryBorder: 'rgba(93, 180, 131, 0.25)',
+  // Primary — forest green
+  primary: '#3A7A5C',
+  primaryDark: '#2C5E46',
+  primaryLight: '#5DB483',
+  primaryMuted: 'rgba(58, 122, 92, 0.10)',
+  primaryBorder: 'rgba(58, 122, 92, 0.18)',
 
   // Accent — warm amber
-  accent: '#E8A642',
-  accentLight: '#F0BC6A',
-  accentMuted: 'rgba(232, 166, 66, 0.15)',
+  accent: '#C96A32',
+  accentLight: '#E08A55',
+  accentMuted: 'rgba(201, 106, 50, 0.12)',
 
-  // Text
-  text: '#EDF2EE',
-  textSecondary: '#A5C4AF',
-  textMuted: 'rgba(165, 196, 175, 0.5)',
-  textInverted: '#0D1F1A',
-  textAccent: '#E8A642',
+  // Text — dark green-black
+  text: '#1A2E22',
+  textSecondary: '#4A7060',
+  textMuted: 'rgba(74, 112, 96, 0.5)',
+  textInverted: '#FFFFFF',
+  textAccent: '#C96A32',
 
   // Utility
-  error: '#E05555',
-  errorMuted: 'rgba(224, 85, 85, 0.15)',
-  success: '#5DB483',
+  error: '#C0392B',
+  errorMuted: 'rgba(192, 57, 43, 0.10)',
+  success: '#3A7A5C',
   white: '#FFFFFF',
 
   // Tab bar
-  tabBg: '#0D1F1A',
-  tabActive: '#7ECBA0',
-  tabInactive: 'rgba(165, 196, 175, 0.35)',
+  tabBg: '#F4ECE1',
+  tabActive: '#3A7A5C',
+  tabInactive: 'rgba(58, 122, 92, 0.32)',
+  tabBorder: 'rgba(58, 122, 92, 0.12)',
 
   // Divider
-  divider: 'rgba(255,255,255,0.06)',
+  divider: 'rgba(58, 122, 92, 0.10)',
+
+  // Category colors (for stretch groups)
+  catNeck: '#4A90A4',
+  catShoulders: '#7B68B0',
+  catBack: '#3A7A5C',
+  catWrists: '#D4874A',
+  catHips: '#B05A6A',
+  catFull: '#5D8A38',
 
   // Overlays
-  overlay: 'rgba(13, 31, 26, 0.92)',
-  overlayLight: 'rgba(13, 31, 26, 0.6)',
+  overlay: 'rgba(26, 46, 34, 0.88)',
+  overlayLight: 'rgba(26, 46, 34, 0.55)',
 };
 
 export default Colors;

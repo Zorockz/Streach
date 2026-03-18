@@ -13,28 +13,80 @@ import {
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
-import { BODY_AREAS, STRETCHES, BodyArea } from "@/constants/stretches";
+import {
+  STRETCH_CATEGORIES,
+  STRETCHES,
+  BodyArea,
+  getStretchesByCategory,
+  Stretch,
+  StretchCategory,
+} from "@/constants/stretches";
 
-const AREA_ICONS: Record<string, string> = {
-  neck: "swap-vertical-outline",
-  shoulders: "chevron-expand-outline",
-  back: "body-outline",
-  wrists: "hand-left-outline",
-  hips: "walk-outline",
-  full: "pulse-outline",
-};
+function CategoryPill({
+  cat,
+  selected,
+  onPress,
+}: {
+  cat: StretchCategory;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={[styles.pill, selected && { backgroundColor: cat.color }]}
+      onPress={onPress}
+    >
+      <Ionicons
+        name={cat.icon as any}
+        size={13}
+        color={selected ? "#fff" : Colors.textSecondary}
+      />
+      <Text style={[styles.pillText, selected && styles.pillTextOn]}>
+        {cat.label.split(" ")[0]}
+      </Text>
+    </Pressable>
+  );
+}
+
+function StretchCard({
+  stretch,
+  cat,
+  onPress,
+}: {
+  stretch: Stretch;
+  cat: StretchCategory;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={styles.card} onPress={onPress}>
+      <View style={[styles.cardIcon, { backgroundColor: cat.bgColor }]}>
+        <Ionicons name={stretch.icon as any} size={22} color={cat.color} />
+      </View>
+      <View style={styles.cardBody}>
+        <Text style={styles.cardName}>{stretch.name}</Text>
+        <Text style={styles.cardDesc} numberOfLines={1}>
+          {stretch.description}
+        </Text>
+        <View style={styles.cardMeta}>
+          <View style={[styles.tag, { backgroundColor: cat.bgColor }]}>
+            <Text style={[styles.tagText, { color: cat.color }]}>
+              {stretch.durationSeconds}s
+            </Text>
+          </View>
+          <View style={styles.tag}>
+            <Text style={styles.tagText}>{stretch.difficulty}</Text>
+          </View>
+        </View>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+    </Pressable>
+  );
+}
 
 export default function StretchesScreen() {
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<BodyArea | null>(null);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 34 : 0;
-
-  const filtered = selected
-    ? STRETCHES.filter(
-        (s) => s.bodyArea.includes(selected) || s.bodyArea.includes("full")
-      )
-    : STRETCHES;
 
   const handleArea = async (id: BodyArea) => {
     if (Platform.OS !== "web") await Haptics.selectionAsync();
@@ -47,87 +99,101 @@ export default function StretchesScreen() {
     router.push({ pathname: "/stretch/[id]", params: { id } });
   };
 
+  const groups = getStretchesByCategory();
+  const filteredGroups = selected
+    ? groups.filter((g) => g.category.id === selected)
+    : groups;
+
+  const totalCount = filteredGroups.reduce(
+    (acc, g) => acc + g.stretches.length,
+    0
+  );
+
   return (
-    <View style={[styles.container, { paddingTop: topPad, paddingBottom: bottomPad }]}>
+    <View style={[styles.container, { paddingTop: topPad }]}>
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Stretch Library</Text>
-        <Text style={styles.sub}>{filtered.length} stretches</Text>
+        <Text style={styles.title}>Stretches</Text>
+        <Text style={styles.sub}>
+          {totalCount} stretch{totalCount !== 1 ? "es" : ""}
+          {selected ? ` in ${STRETCH_CATEGORIES.find(c => c.id === selected)?.label}` : " across 6 categories"}
+        </Text>
       </View>
 
-      {/* Area filter */}
+      {/* Category filter row */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterRow}
         style={styles.filterScroll}
       >
-        {BODY_AREAS.map((area) => (
-          <Pressable
-            key={area.id}
-            style={[styles.pill, selected === area.id && styles.pillActive]}
-            onPress={() => handleArea(area.id)}
-          >
-            <Ionicons
-              name={AREA_ICONS[area.id] as any}
-              size={13}
-              color={
-                selected === area.id ? Colors.textInverted : Colors.textSecondary
-              }
-            />
-            <Text
-              style={[
-                styles.pillText,
-                selected === area.id && styles.pillTextActive,
-              ]}
-            >
-              {area.label}
-            </Text>
-          </Pressable>
+        {STRETCH_CATEGORIES.map((cat) => (
+          <CategoryPill
+            key={cat.id}
+            cat={cat}
+            selected={selected === cat.id}
+            onPress={() => handleArea(cat.id)}
+          />
         ))}
       </ScrollView>
 
+      {/* Grouped list */}
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.list}
       >
-        {filtered.map((stretch, i) => (
+        {filteredGroups.map((group, gi) => (
           <Animated.View
-            key={stretch.id}
-            entering={FadeInDown.duration(350).delay(i * 40)}
+            key={group.category.id}
+            entering={FadeInDown.duration(350).delay(gi * 60)}
           >
-            <Pressable
-              style={styles.card}
-              onPress={() => handleStretch(stretch.id)}
-            >
-              <View style={styles.cardIcon}>
+            {/* Category header */}
+            <View style={styles.groupHeader}>
+              <View
+                style={[
+                  styles.groupIcon,
+                  { backgroundColor: group.category.bgColor },
+                ]}
+              >
                 <Ionicons
-                  name={stretch.icon as any}
-                  size={24}
-                  color={Colors.primary}
-                />
-              </View>
-              <View style={styles.cardBody}>
-                <Text style={styles.cardName}>{stretch.name}</Text>
-                <Text style={styles.cardDesc} numberOfLines={1}>
-                  {stretch.description}
-                </Text>
-                <View style={styles.cardTags}>
-                  {stretch.bodyArea.slice(0, 2).map((a) => (
-                    <View key={a} style={styles.tag}>
-                      <Text style={styles.tagText}>{a}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-              <View style={styles.cardRight}>
-                <Text style={styles.duration}>{stretch.durationSeconds}s</Text>
-                <Ionicons
-                  name="chevron-forward"
+                  name={group.category.icon as any}
                   size={16}
-                  color={Colors.textMuted}
+                  color={group.category.color}
                 />
               </View>
-            </Pressable>
+              <View>
+                <Text style={styles.groupTitle}>{group.category.label}</Text>
+                <Text style={styles.groupSub}>{group.category.description}</Text>
+              </View>
+              <View
+                style={[
+                  styles.groupCount,
+                  { backgroundColor: group.category.bgColor },
+                ]}
+              >
+                <Text
+                  style={[styles.groupCountText, { color: group.category.color }]}
+                >
+                  {group.stretches.length}
+                </Text>
+              </View>
+            </View>
+
+            {/* Stretch cards in this group */}
+            <View style={styles.groupCards}>
+              {group.stretches.map((stretch, si) => (
+                <Animated.View
+                  key={stretch.id}
+                  entering={FadeInDown.duration(300).delay(gi * 60 + si * 40)}
+                >
+                  <StretchCard
+                    stretch={stretch}
+                    cat={group.category}
+                    onPress={() => handleStretch(stretch.id)}
+                  />
+                </Animated.View>
+              ))}
+            </View>
           </Animated.View>
         ))}
         <View style={{ height: 110 }} />
@@ -140,14 +206,14 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
   header: { paddingHorizontal: 20, paddingTop: 8, marginBottom: 14 },
   title: {
-    fontSize: 26,
+    fontSize: 27,
     fontFamily: "DM_Sans_700Bold",
     color: Colors.text,
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
     marginBottom: 2,
   },
   sub: { fontSize: 13, fontFamily: "DM_Sans_400Regular", color: Colors.textMuted },
-  filterScroll: { marginBottom: 14 },
+  filterScroll: { marginBottom: 10 },
   filterRow: { paddingHorizontal: 20, gap: 8 },
   pill: {
     flexDirection: "row",
@@ -157,28 +223,66 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.divider,
   },
-  pillActive: { backgroundColor: Colors.primary },
   pillText: {
     fontSize: 13,
     fontFamily: "DM_Sans_500Medium",
     color: Colors.textSecondary,
   },
-  pillTextActive: { color: Colors.textInverted },
-  list: { paddingHorizontal: 20, gap: 10 },
-  card: {
-    backgroundColor: Colors.bgCard,
-    borderRadius: 16,
-    padding: 16,
+  pillTextOn: { color: "#fff" },
+  list: { paddingHorizontal: 20 },
+  groupHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
+    gap: 12,
+    marginTop: 22,
+    marginBottom: 10,
+  },
+  groupIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  groupTitle: {
+    fontSize: 15,
+    fontFamily: "DM_Sans_700Bold",
+    color: Colors.text,
+    marginBottom: 1,
+  },
+  groupSub: {
+    fontSize: 11,
+    fontFamily: "DM_Sans_400Regular",
+    color: Colors.textMuted,
+  },
+  groupCount: {
+    marginLeft: "auto",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  groupCountText: {
+    fontSize: 13,
+    fontFamily: "DM_Sans_700Bold",
+  },
+  groupCards: { gap: 8 },
+  card: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: 14,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: Colors.divider,
   },
   cardIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: Colors.primaryMuted,
+    width: 48,
+    height: 48,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -196,23 +300,17 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginBottom: 7,
   },
-  cardTags: { flexDirection: "row", gap: 5 },
+  cardMeta: { flexDirection: "row", gap: 5 },
   tag: {
-    backgroundColor: "rgba(93,180,131,0.1)",
-    paddingHorizontal: 7,
+    backgroundColor: Colors.bgSurface,
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
   },
   tagText: {
     fontSize: 10,
     fontFamily: "DM_Sans_500Medium",
-    color: Colors.primaryLight,
-    textTransform: "capitalize",
-  },
-  cardRight: { alignItems: "center", gap: 6 },
-  duration: {
-    fontSize: 13,
-    fontFamily: "DM_Sans_600SemiBold",
     color: Colors.textSecondary,
+    textTransform: "capitalize",
   },
 });

@@ -1,4 +1,3 @@
-import { BlurView } from "expo-blur";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SymbolView } from "expo-symbols";
@@ -8,7 +7,6 @@ import { Colors } from "@/constants/colors";
 
 export default function TabLayout() {
   const isIOS = Platform.OS === "ios";
-  const isWeb = Platform.OS === "web";
 
   return (
     <Tabs
@@ -19,28 +17,14 @@ export default function TabLayout() {
         tabBarLabelStyle: {
           fontFamily: "DM_Sans_500Medium",
           fontSize: 11,
-          marginBottom: isWeb ? 0 : -2,
         },
         tabBarStyle: {
-          position: "absolute",
-          backgroundColor: isIOS ? "transparent" : Colors.tabBg,
+          backgroundColor: Colors.tabBg,
           borderTopWidth: 1,
-          borderTopColor: Colors.primaryBorder,
+          borderTopColor: Colors.tabBorder,
           elevation: 0,
-          ...(isWeb ? { height: 70 } : {}),
+          shadowColor: "transparent",
         },
-        tabBarBackground: () =>
-          isIOS ? (
-            <BlurView
-              intensity={70}
-              tint="dark"
-              style={StyleSheet.absoluteFill}
-            />
-          ) : (
-            <View
-              style={[StyleSheet.absoluteFill, { backgroundColor: Colors.tabBg }]}
-            />
-          ),
       }}
     >
       <Tabs.Screen
@@ -49,37 +33,21 @@ export default function TabLayout() {
           title: "Home",
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView
-                name={focused ? "house.fill" : "house"}
-                tintColor={color}
-                size={22}
-              />
+              <SymbolView name={focused ? "house.fill" : "house"} tintColor={color} size={22} />
             ) : (
-              <Ionicons
-                name={focused ? "home" : "home-outline"}
-                size={22}
-                color={color}
-              />
+              <Ionicons name={focused ? "home" : "home-outline"} size={22} color={color} />
             ),
         }}
       />
       <Tabs.Screen
         name="stretches"
         options={{
-          title: "Library",
+          title: "Stretches",
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView
-                name="figure.flexibility"
-                tintColor={color}
-                size={22}
-              />
+              <SymbolView name="figure.flexibility" tintColor={color} size={22} />
             ) : (
-              <Ionicons
-                name={focused ? "body" : "body-outline"}
-                size={22}
-                color={color}
-              />
+              <Ionicons name={focused ? "body" : "body-outline"} size={22} color={color} />
             ),
         }}
       />
@@ -89,17 +57,9 @@ export default function TabLayout() {
           title: "Progress",
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView
-                name={focused ? "chart.bar.fill" : "chart.bar"}
-                tintColor={color}
-                size={22}
-              />
+              <SymbolView name={focused ? "chart.bar.fill" : "chart.bar"} tintColor={color} size={22} />
             ) : (
-              <Ionicons
-                name={focused ? "bar-chart" : "bar-chart-outline"}
-                size={22}
-                color={color}
-              />
+              <Ionicons name={focused ? "bar-chart" : "bar-chart-outline"} size={22} color={color} />
             ),
         }}
       />
@@ -109,17 +69,9 @@ export default function TabLayout() {
           title: "Settings",
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView
-                name={focused ? "gearshape.fill" : "gearshape"}
-                tintColor={color}
-                size={22}
-              />
+              <SymbolView name={focused ? "gearshape.fill" : "gearshape"} tintColor={color} size={22} />
             ) : (
-              <Ionicons
-                name={focused ? "settings" : "settings-outline"}
-                size={22}
-                color={color}
-              />
+              <Ionicons name={focused ? "settings" : "settings-outline"} size={22} color={color} />
             ),
         }}
       />
