@@ -30,6 +30,9 @@ import { StretchIcon } from "@/components/StretchIcon";
 import { STRETCHES, STRETCH_CATEGORIES, getRandomStretch } from "@/constants/stretches";
 import { useApp } from "@/context/AppContext";
 
+// Must be at module level — never inside a render function
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
 type Phase = "ready" | "running" | "done";
 type Breath = "in" | "hold" | "out";
 
@@ -51,8 +54,6 @@ function TimerRing({ progress }: { progress: number }) {
   const animatedProps = useAnimatedProps(() => ({
     strokeDashoffset: CIRC * (1 - animProg.value),
   }));
-
-  const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
   return (
     <Svg width={240} height={240} style={{ position: "absolute" }}>
@@ -265,7 +266,7 @@ export default function StretchSessionScreen() {
         ) : <View style={{ width: 72 }} />}
       </View>
 
-      {/* Category + timer */}
+      {/* Category chip */}
       <View style={styles.subHeader}>
         {cat && (
           <View style={[styles.catChip, { backgroundColor: cat.bgColor }]}>
@@ -273,11 +274,12 @@ export default function StretchSessionScreen() {
             <Text style={[styles.catChipText, { color: cat.color }]}>{cat.label}</Text>
           </View>
         )}
-        {phase === "running" && (
-          <Animated.View entering={FadeIn.duration(300)} style={styles.timerChip}>
+        <View style={{ flex: 1 }} />
+        {phase === "ready" && (
+          <View style={styles.timerChip}>
             <Ionicons name="time-outline" size={12} color={Colors.textSecondary} />
-            <Text style={styles.timerChipText}>{formatTime(remaining)}</Text>
-          </Animated.View>
+            <Text style={styles.timerChipText}>{formatTime(duration)}</Text>
+          </View>
         )}
       </View>
 
