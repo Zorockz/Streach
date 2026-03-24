@@ -1,0 +1,236 @@
+You are a senior React Native / Expo engineer and mobile UX designer. 
+Completely rewrite the onboarding flow for the StretchGate app.
+
+The file is at: artifacts/mobile/app/onboarding.tsx
+Also read these for context:
+- artifacts/mobile/constants/colors.ts
+- artifacts/mobile/constants/stretches.ts  
+- artifacts/mobile/context/AppContext.tsx
+- artifacts/mobile/app/_layout.tsx
+
+---
+
+## REQUIREMENTS — read all of these before writing a single line of code
+
+### 1. FULL SCREEN — no safe area constraints
+Every onboarding screen must be edge-to-edge, full bleed.
+- Use StatusBar with hidden={true} or translucent on every screen
+- The root container must be: flex:1, backgroundColor matches the screen, NO SafeAreaView wrapper on any step
+- Content must go all the way to the top and bottom edges of the screen
+- Use paddingTop with Platform.OS inset values only where text would be hidden behind a notch
+
+### 2. NO PROGRESS DOTS OR STEP INDICATORS
+Do not show dots, numbers, step counts, "3 of 7", progress bars, or any indicator of how many screens there are.
+Remove all of them entirely.
+The user should feel like they are in a flowing experience, not filling out a form.
+
+### 3. CINEMATIC SPLASH SCREEN — 5 second opening experience
+The very first thing the user sees when they open the app for the first time must be a 5-second animated splash/intro experience. This is not a loading spinner. This is a brand moment.
+
+Build it as follows:
+- Full screen background color: Colors.bg (#F4ECE1)
+- Step 1 (0-1.2s): Screen starts completely dark (#0D1F1A), then fades in
+- Step 2 (1.2s): The app icon or a large leaf/nature SVG shape animates in from scale 0.6 to 1.0 with a spring, centered on screen
+- Step 3 (2.0s): App name "StretchGate" fades and slides up into position below the icon. Font: DM_Sans_700Bold, size 42, color Colors.text, letterSpacing -1.5
+- Step 4 (2.8s): A short punchy tagline fades in below the name. Text: "Earn your scroll." Font: DM_Sans_400Regular, size 18, color Colors.textSecondary
+- Step 5 (4.0s): A very subtle "continue" hint appears — just a small downward chevron icon pulsing gently. Color: Colors.textMuted
+- Step 6 (5.0s): Automatically advances to the next screen with a smooth cross-fade transition
+- The user can also tap anywhere on this screen to skip to next screen after 2 seconds have elapsed
+- Use Reanimated withTiming, withSpring, withDelay, withSequence for all animations
+- No buttons. No text other than the name and tagline. Pure brand moment.
+
+### 4. EMOTIONAL CONNECTION SCREENS — before asking anything from the user
+After the splash, show 3 emotional/value screens before any questions. These are full-screen, one message at a time, large typography, minimal. Each has a NEXT button at the bottom (full width, Colors.primary background).
+
+Screen A — "The Problem"
+- Large headline (32px bold): "You open TikTok.\nThen 45 minutes disappear."
+- Subtext (16px regular, Colors.textSecondary): "It's not a willpower problem. It's a design problem. Your apps are built to keep you stuck."
+- Background: Colors.bg
+- Visual: A simple animated illustration — just use a large Ionicons "phone-portrait-outline" icon (120px, Colors.textMuted) that slowly tilts side to side with a gentle rotation animation using withRepeat withSequence
+
+Screen B — "The Shift"  
+- Large headline (32px bold): "What if your body\nwas the password?"
+- Subtext: "30 seconds of movement before you scroll. That's it. A tiny gate that changes everything."
+- Background: Colors.bg
+- Visual: Large Ionicons "body-outline" icon (120px, Colors.primary) with a gentle scale pulse animation (1.0 to 1.06, 2s loop)
+
+Screen C — "The Promise"
+- Large headline (32px bold): "Move a little.\nScroll a lot less."
+- Subtext: "StretchGate doesn't punish you. It just asks you to show up for your body first."
+- Background: Colors.bg  
+- Visual: Large Ionicons "leaf-outline" icon (120px, Colors.primary) with the same gentle scale pulse
+
+All three screens:
+- Headline text centered, paddingHorizontal 32
+- Subtext centered, paddingHorizontal 40, lineHeight 24, marginTop 16, color Colors.textSecondary
+- The icon/visual is above the text, takes up roughly the top 45% of the screen
+- NEXT button at bottom: full width, marginHorizontal 24, paddingVertical 18, borderRadius 18, backgroundColor Colors.primary, text "Next" in DM_Sans_700Bold size 17 Colors.white
+- Bottom of button should have paddingBottom that accounts for home indicator (use bottom inset from useSafeAreaInsets but only for the button padding, not the container)
+- Each screen entrance: the headline and subtext animate in with FadeInDown from react-native-reanimated
+
+### 5. PERSONALIZATION SCREENS — clean, no boxes, beautiful selections
+
+After the 3 emotional screens, show the personalization questions:
+
+#### Screen D — Focus Areas (which body areas)
+- Headline: "Where do you\nhold tension?" (28px bold, centered)
+- Sub: "We'll prioritize stretches for these areas." (14px, Colors.textMuted, centered)
+- Selection UI: NOT boxes. Use large pill/chip buttons arranged in a 2-column grid.
+  Each chip:
+  - Full rounded pill shape: borderRadius 100
+  - Height: 56px
+  - Selected state: backgroundColor Colors.primary, text Colors.white
+  - Unselected state: backgroundColor Colors.bgCard, borderWidth 1, borderColor Colors.divider, text Colors.textSecondary
+  - Contains: a MaterialCommunityIcons icon (18px) on the left + the area label text (15px DM_Sans_600SemiBold) 
+  - Use the mciIcon and label from STRETCH_CATEGORIES in stretches.ts
+  - Multi-select allowed
+  - Spring animation on select/deselect: scale 0.96 then back to 1.0
+- "Next" button at bottom — same style as before
+- Allow skipping (selecting 0 areas = selects all areas by default when saved)
+
+#### Screen E — Stretch Duration
+- Headline: "How long can\nyou spare?" (28px bold, centered)
+- Sub: "This is how long each stretch will take." (14px, Colors.textMuted, centered)
+- Selection UI: 3 large vertically-stacked option cards (NOT small chips)
+  Each card:
+  - borderRadius 20, padding 20, marginHorizontal 24
+  - Height: ~88px
+  - Unselected: backgroundColor Colors.bgCard, borderWidth 1, borderColor Colors.divider
+  - Selected: backgroundColor Colors.primary, borderColor Colors.primary
+  - Left side: large number (32px bold) showing the seconds + "s" label (14px)
+  - Right side: a short descriptor
+    - 20s → "Quick reset"
+    - 45s → "Sweet spot" (add a small "Popular" badge in accentMuted color)
+    - 60s → "Deep stretch"
+  - Spring animation on select
+- Pre-select 45s as default
+- "Next" button at bottom
+
+#### Screen F — Daily Goal
+- Headline: "How many times\nper day?" (28px bold, centered)
+- Sub: "Each stretch earns one unlock." (14px, Colors.textMuted, centered)
+- Selection UI: A large number picker — not a slider, not chips
+  - Show a big centered number (72px, DM_Sans_700Bold, Colors.text)
+  - Below it: the word "stretches" (16px, Colors.textMuted)
+  - A minus button on the left and plus button on the right
+  - Minus/plus buttons: 52px circles, backgroundColor Colors.bgCard, borderWidth 1, borderColor Colors.divider
+  - Range: 1 to 10, default 3
+  - The number animates with a quick scale bounce when changed (withSpring)
+- "Next" button at bottom
+
+#### Screen G — App Selection (which apps to gate)
+- Headline: "Which apps\nshould require a stretch?" (28px bold, centered)
+- Sub: "You can change these anytime." (14px, Colors.textMuted, centered)
+- Selection UI: Vertical scrollable list of app rows (NOT boxes or grid)
+  Each row:
+  - Height: 64px
+  - backgroundColor Colors.bgCard, borderRadius 16, marginBottom 8, paddingHorizontal 16
+  - Left: the app's Ionicons icon in a 40x40 rounded square (backgroundColor is the app's color at 15% opacity, icon color is app.color)
+  - Middle: app name (15px DM_Sans_600SemiBold, Colors.text)
+  - Right: a custom toggle/checkmark
+    - Unselected: empty circle (22px, borderWidth 1.5, borderColor Colors.divider)
+    - Selected: filled circle (22px, backgroundColor Colors.primary) with a white checkmark Ionicons inside
+  - Row has a spring scale animation when toggled
+  - Use DISTRACTING_APPS from stretches.ts
+- Multi-select
+- "Next" button at bottom (sticky, doesn't scroll with list)
+
+### 6. PERMISSIONS SCREEN
+- Headline: "One important thing" (28px bold)
+- This is NOT a generic permissions screen. It must feel personal and trustworthy.
+- Show 2 permission items as large illustrated rows:
+
+Item 1 — Screen Time Access
+- Icon: Ionicons "shield-checkmark-outline" (32px, Colors.primary) in a 64x64 rounded square (Colors.primaryMuted background)
+- Title: "Screen Time Access" (16px bold)
+- Description: "This lets StretchGate gate your chosen apps. Only you control it — you can turn it off in Settings anytime." (13px, Colors.textMuted)
+- This is required. Show a small "Required" badge in primaryMuted color.
+
+Item 2 — Notifications  
+- Icon: Ionicons "notifications-outline" (32px, Colors.accent) in a 64x64 rounded square (Colors.accentMuted background)
+- Title: "Daily Reminders" (16px bold)
+- Description: "Optional nudges to keep your streak going. No spam — one reminder a day at most." (13px, Colors.textMuted)
+- Show a toggle switch (React Native Switch component) on the right — default off
+- Only request this permission if the user toggles it on
+
+- Below the two items, show a small reassurance line: 
+  "🔒 Your data never leaves your device." (12px, Colors.textMuted, centered)
+
+- CTA button: "Grant Screen Time Access" (full width, Colors.primary)
+  - When tapped: call AuthorizationCenter (mock this for now — call a function requestFamilyControlsAuth() that console.logs "requesting auth" and resolves after 1 second with success, then advances to next screen)
+  - Show a loading spinner inside the button while waiting
+  - If mock succeeds: advance to next screen
+  - If mock fails: show a small error message below the button
+
+- Below the main CTA, show a secondary text link: "Skip for now — I'll set this up later" (Colors.textMuted, 13px)
+  - Tapping this advances without granting (honor-system mode)
+
+### 7. COMPLETION SCREEN — sell the transformation
+Final screen before entering the app.
+
+- Full screen, Colors.primary background (dark forest green)
+- Everything is Colors.white or white with opacity
+- Large Ionicons "checkmark-circle" icon (80px, white) animates in with a spring scale from 0 to 1
+- Headline: "You're ready." (38px bold, white, centered) — FadeInDown
+- Subtext: "Every stretch is a small win.\nEvery scroll is earned." (18px, white at 75% opacity, centered) — FadeInDown with delay
+- Below: 3 small stat-like rows that appear one by one with staggered FadeInDown:
+  - "✦  {selectedAreas.length > 0 ? selectedAreas.length : 'All'} body areas targeted"
+  - "✦  {selectedApps.length} apps gated"
+  - "✦  {selectedDuration}s stretches"
+  - Each row: 14px, white at 85% opacity, centered
+- CTA button at bottom: "Start Moving" — backgroundColor white, text Colors.primary, full width, borderRadius 18, paddingVertical 18
+- No "back" option from this screen
+
+---
+
+## NAVIGATION & STATE RULES
+
+- Use a local step state: const [step, setStep] = useState(0)
+- Steps: 0=splash, 1=problemScreen, 2=shiftScreen, 3=promiseScreen, 4=focusAreas, 5=duration, 6=dailyGoal, 7=appSelection, 8=permissions, 9=completion
+- Navigation between steps: always use a goNext() function that increments step with a smooth cross-fade transition using Animated (opacity fade 200ms between steps)
+- NO back button on any screen. This is a forward-only flow.
+- On the completion screen CTA press:
+  - Call updateSettings with all collected data: focusBodyAreas, preferredDuration (mapped: "20"→20, "45"→45, "60"→60), dailyGoal, lockedApps (array of app ids), hasCompletedOnboarding: true
+  - Then navigate to /(tabs)/ using router.replace('/(tabs)/')
+
+## TRANSITION BETWEEN STEPS
+Between every step change, do a quick opacity fade:
+- Fade current step out (opacity 1 → 0, 150ms)
+- Switch step state
+- Fade new step in (opacity 0 → 1, 200ms)
+Use a single Animated.Value for this, wrapping the whole step content area.
+
+---
+
+## TECHNICAL REQUIREMENTS
+- Single file: artifacts/mobile/app/onboarding.tsx
+- All components defined in the same file (no imports from other component files except Colors, stretches constants, AppContext)
+- TypeScript — no any types unless absolutely necessary for icon names
+- All Reanimated animations use the worklet-safe API (useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, withSequence, withRepeat)
+- Use useSafeAreaInsets() ONLY for bottom button padding — not for screen containers
+- expo-haptics: fire Haptics.selectionAsync() on every chip/card selection, Haptics.impactAsync(Medium) on Next button press, Haptics.notificationAsync(Success) on completion screen CTA
+- Platform.OS check before every haptics call
+- No ScrollView on the step container itself — each step manages its own scroll if needed (only the app selection step needs a ScrollView for the list)
+- Import useSafeAreaInsets from 'react-native-safe-area-context'
+
+---
+
+## WHAT NOT TO DO
+- Do NOT show progress dots or step numbers
+- Do NOT use SafeAreaView as the root container on any step
+- Do NOT use boxes with borders for area selection — use pills
+- Do NOT show more than one "screen" worth of content per step
+- Do NOT use placeholder text like "TODO" or "coming soon"
+- Do NOT skip the 5 second splash — it is required
+- Do NOT make the Next button say anything other than "Next" (except the final CTA which says "Start Moving" and the permissions CTA which says "Grant Screen Time Access")
+- Do NOT add a back button anywhere
+
+---
+
+## AFTER WRITING THE CODE
+1. Make sure the file compiles with no TypeScript errors
+2. Check all imports are correct and the file can run standalone
+3. Run: git add artifacts/mobile/app/onboarding.tsx
+4. Run: git commit -m "feat: complete onboarding rewrite — cinematic splash, emotional flow, pill selections, permissions"
+5. Run: git push origin main
+6. Report back: what was built, any compromises made, the commit hash
