@@ -18,7 +18,6 @@ import {
 } from "react-native";
 import Reanimated, {
   FadeInDown,
-  FadeInUp,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -36,7 +35,7 @@ import {
 } from "@/constants/stretches";
 import { useApp } from "@/context/AppContext";
 
-const TOTAL_STEPS = 15;
+const TOTAL_STEPS = 16;
 
 // ─── Shared Next Button ───────────────────────────────────────────────────────
 function NextButton({
@@ -1137,7 +1136,129 @@ function PermissionsStep({
   );
 }
 
-// ─── Step 14: Completion ──────────────────────────────────────────────────────
+// ─── Step 14: Customizing Plan ────────────────────────────────────────────────
+const PLAN_STEPS = [
+  "Building your stretch library...",
+  "Personalizing timing...",
+  "Configuring your gates...",
+  "Syncing your preferences...",
+  "Almost ready...",
+];
+
+function CustomizingPlanStep({ onNext }: { onNext: () => void }) {
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const phaseAnim = useRef(new Animated.Value(1)).current;
+  const [phaseIdx, setPhaseIdx] = useState(0);
+  const [trackWidth, setTrackWidth] = useState(0);
+
+  useEffect(() => {
+    // Fill bar over 3.2 seconds (JS-driven so we can animate width)
+    Animated.timing(progressAnim, {
+      toValue: 1,
+      duration: 3200,
+      useNativeDriver: false,
+    }).start();
+
+    // Cycle phase text with a cross-fade
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    PLAN_STEPS.forEach((_, i) => {
+      if (i === 0) return;
+      timers.push(
+        setTimeout(() => {
+          Animated.sequence([
+            Animated.timing(phaseAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
+            Animated.timing(phaseAnim, { toValue: 1, duration: 220, useNativeDriver: true }),
+          ]).start();
+          setTimeout(() => setPhaseIdx(i), 180);
+        }, i * 680)
+      );
+    });
+
+    // Auto-advance after bar completes
+    const done = setTimeout(onNext, 3600);
+    return () => {
+      timers.forEach(clearTimeout);
+      clearTimeout(done);
+    };
+  }, []);
+
+  const barWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, trackWidth],
+  });
+
+  return (
+    <View style={cz.container}>
+      <View style={cz.top}>
+        <Reanimated.View entering={FadeInDown.duration(500)} style={cz.iconBox}>
+          <Ionicons name="sparkles-outline" size={48} color={Colors.primary} />
+        </Reanimated.View>
+        <Reanimated.Text entering={FadeInDown.duration(500).delay(80)} style={cz.title}>
+          {"Customizing\nyour plan"}
+        </Reanimated.Text>
+      </View>
+
+      <View style={cz.barSection}>
+        <View
+          style={cz.barTrack}
+          onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+        >
+          <Animated.View style={[cz.barFill, { width: barWidth }]} />
+        </View>
+        <Animated.Text style={[cz.phase, { opacity: phaseAnim }]}>
+          {PLAN_STEPS[phaseIdx]}
+        </Animated.Text>
+      </View>
+    </View>
+  );
+}
+
+const cz = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.bg,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 40,
+  },
+  top: { alignItems: "center", marginBottom: 56 },
+  iconBox: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: Colors.primaryMuted,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 28,
+  },
+  title: {
+    fontSize: 30,
+    fontFamily: "DM_Sans_700Bold",
+    color: Colors.text,
+    textAlign: "center",
+    lineHeight: 38,
+  },
+  barSection: { width: "100%", alignItems: "center", gap: 16 },
+  barTrack: {
+    width: "100%",
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.divider,
+    overflow: "hidden",
+  },
+  barFill: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.primary,
+  },
+  phase: {
+    fontSize: 13,
+    fontFamily: "DM_Sans_400Regular",
+    color: Colors.textMuted,
+  },
+});
+
+// ─── Step 15: Completion ──────────────────────────────────────────────────────
 function CompletionStep({
   selectedAreas,
   selectedApps,
@@ -1334,7 +1455,8 @@ export default function OnboardingScreen() {
       case 11: return <AppSelectionStep selected={selectedApps} setSelected={setSelectedApps} onNext={goNext} />;
       case 12: return <ReminderTimingStep selected={selectedReminderTimes} setSelected={setSelectedReminderTimes} onNext={goNext} />;
       case 13: return <PermissionsStep notifOn={notifEnabled} setNotifOn={setNotifEnabled} onNext={goNext} />;
-      case 14: return <CompletionStep selectedAreas={selectedAreas} selectedApps={selectedApps} selectedDuration={selectedDuration} onFinish={handleFinish} />;
+      case 14: return <CustomizingPlanStep onNext={goNext} />;
+      case 15: return <CompletionStep selectedAreas={selectedAreas} selectedApps={selectedApps} selectedDuration={selectedDuration} onFinish={handleFinish} />;
       default: return null;
     }
   };
