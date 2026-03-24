@@ -9,7 +9,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
-import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AppProvider, useApp } from "@/context/AppContext";
@@ -24,7 +23,7 @@ function RootNavigator() {
   const { settings, isLoading } = useApp();
 
   useEffect(() => {
-    if (!isLoading && !settings.hasCompletedOnboarding && Platform.OS !== "web") {
+    if (!isLoading && !settings.hasCompletedOnboarding) {
       router.replace("/onboarding");
     }
   }, [isLoading]);
