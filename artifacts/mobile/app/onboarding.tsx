@@ -34,6 +34,11 @@ import {
   BodyArea,
 } from "@/constants/stretches";
 import { useApp } from "@/context/AppContext";
+import {
+  requestReminderPermissions,
+  syncStretchReminderNotifications,
+} from "@/services/notifications";
+import type { ReminderTime as ServiceReminderTime } from "@/services/notifications";
 
 const TOTAL_STEPS = 16;
 
@@ -1428,16 +1433,47 @@ export default function OnboardingScreen() {
   }, [step, goNext]);
 
   const handleFinish = useCallback(async () => {
+    // Map capitalized local types to lowercase service types
+    const mappedReminderTimes = selectedReminderTimes.map(
+      t => t.toLowerCase() as ServiceReminderTime
+    );
+    const mappedScrollTimes = selectedScrollTimes.map(
+      t => t.toLowerCase() as 'morning' | 'midday' | 'evening' | 'night'
+    );
+
+    let permissionStatus: 'undetermined' | 'granted' | 'denied' = 'undetermined';
+
+    // If user enabled reminders, request permission now
+    if (notifEnabled && mappedReminderTimes.length > 0) {
+      permissionStatus = await requestReminderPermissions();
+    }
+
     await updateSettings({
       focusBodyAreas: selectedAreas,
       preferredDuration: selectedDuration,
       dailyGoal,
       lockedApps: selectedApps,
       reminderEnabled: notifEnabled,
+      selectedScrollTimes: mappedScrollTimes,
+      selectedReminderTimes: mappedReminderTimes,
+      notificationPermissionStatus: permissionStatus,
+      honorSystemMode: true,
       hasCompletedOnboarding: true,
     });
+
+    // Sync notifications with final state
+    await syncStretchReminderNotifications({
+      reminderEnabled: notifEnabled,
+      selectedReminderTimes: mappedReminderTimes,
+      focusBodyAreas: selectedAreas,
+      notificationPermissionStatus: permissionStatus,
+    });
+
     router.replace("/(tabs)/");
-  }, [updateSettings, selectedAreas, selectedDuration, dailyGoal, selectedApps, notifEnabled]);
+  }, [
+    updateSettings, selectedAreas, selectedDuration, dailyGoal,
+    selectedApps, notifEnabled, selectedReminderTimes, selectedScrollTimes,
+  ]);
 
   const renderStep = () => {
     switch (step) {

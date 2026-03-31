@@ -71,14 +71,12 @@ function TimerRing({ progress }: { progress: number }) {
       height={RING_SIZE}
       style={{ position: "absolute" }}
     >
-      {/* Track */}
       <Circle
         cx={center} cy={center} r={RING_R}
         fill="none"
         stroke="rgba(58,122,92,0.12)"
         strokeWidth={6}
       />
-      {/* Progress arc */}
       <AnimatedCircle
         cx={center} cy={center} r={RING_R}
         fill="none"
@@ -197,11 +195,12 @@ const orb = StyleSheet.create({
 
 // ─── Main screen ───────────────────────────────────────────────────────
 export default function StretchSessionScreen() {
-  const { stretchId, targetApp } = useLocalSearchParams<{
+  const { stretchId, targetApp, targetAppId } = useLocalSearchParams<{
     stretchId?: string;
     targetApp?: string;
+    targetAppId?: string;
   }>();
-  const { recordSession } = useApp();
+  const { recordSession, unlockAppForWindow } = useApp();
 
   const stretch = stretchId
     ? STRETCHES.find(s => s.id === stretchId)
@@ -267,12 +266,22 @@ export default function StretchSessionScreen() {
 
   const handleComplete = async () => {
     if (!stretch) return;
+
+    const sessionId = Date.now().toString();
+
+    // Record the session first
     await recordSession({
       stretchId: stretch.id,
       stretchName: stretch.name,
       durationSeconds: elapsed,
       targetApp,
     });
+
+    // If this session was for a specific gated app, unlock it
+    if (targetAppId && targetApp) {
+      await unlockAppForWindow(targetAppId, targetApp, stretch.id, sessionId);
+    }
+
     router.back();
   };
 
@@ -414,7 +423,7 @@ export default function StretchSessionScreen() {
             <Pressable style={styles.startBtn} onPress={handleStart}>
               <Ionicons name="play" size={20} color={Colors.white} />
               <Text style={styles.startBtnText}>
-                Begin · {formatTime(duration)}s
+                Begin \u00b7 {formatTime(duration)}s
               </Text>
             </Pressable>
             <Pressable style={styles.cancelBtn} onPress={() => router.back()}>
@@ -430,7 +439,7 @@ export default function StretchSessionScreen() {
           >
             <Ionicons name="leaf-outline" size={13} color={Colors.textMuted} />
             <Text style={styles.runHintText}>
-              Follow the orb · breathe with it
+              Follow the orb \u00b7 breathe with it
             </Text>
           </Animated.View>
         )}
@@ -469,7 +478,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
     alignItems: "center",
   },
-  // Header
   header: {
     width: "100%",
     flexDirection: "row",
@@ -504,7 +512,6 @@ const styles = StyleSheet.create({
     fontFamily: "DM_Sans_500Medium",
     color: Colors.textSecondary,
   },
-  // Meta row
   metaRow: {
     width: "100%",
     paddingHorizontal: 16,
@@ -533,7 +540,6 @@ const styles = StyleSheet.create({
     fontFamily: "DM_Sans_600SemiBold",
     color: Colors.textSecondary,
   },
-  // Orb section
   orbSection: {
     flex: 1,
     alignItems: "center",
@@ -558,7 +564,6 @@ const styles = StyleSheet.create({
     fontFamily: "DM_Sans_700Bold",
     fontSize: 24,
   },
-  // Instructions
   instrWrap: {
     width: "100%",
     paddingHorizontal: 24,
@@ -586,7 +591,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     width: 14,
   },
-  // Footer
   footer: {
     width: "100%",
     paddingHorizontal: 24,

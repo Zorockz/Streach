@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Linking,
@@ -18,6 +18,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { STRETCH_CATEGORIES, DISTRACTING_APPS, BodyArea } from "@/constants/stretches";
 import { useApp } from "@/context/AppContext";
+import {
+  getReminderPermissionStatus,
+  requestReminderPermissions,
+  syncStretchReminderNotifications,
+} from "@/services/notifications";
+import type { ReminderTime } from "@/services/notifications";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -78,21 +84,45 @@ function AppRow({ app, checked, onToggle, divider }: {
   );
 }
 
-// Screen Time status row
-function ScreenTimeStatusRow({ done }: { done: boolean }) {
-  return (
-    <View style={styles.stStatus}>
-      <View style={[styles.stDot, { backgroundColor: done ? Colors.primary : Colors.accentLight }]} />
-      <Text style={styles.stStatusText}>
-        {done ? "Screen Time set up — you're covered" : "Not yet configured"}
-      </Text>
-    </View>
-  );
-}
+const REMINDER_OPTS: { id: ReminderTime; label: string; icon: string; sub: string }[] = [
+  { id: "morning", label: "Morning", icon: "cafe-outline", sub: "8:00 AM" },
+  { id: "midday",  label: "Midday",  icon: "partly-sunny-outline", sub: "1:00 PM" },
+  { id: "evening", label: "Evening", icon: "moon-outline", sub: "8:00 PM" },
+];
+
+const UNLOCK_WINDOW_OPTS: { value: number; label: string }[] = [
+  { value: 5,  label: "5 min" },
+  { value: 10, label: "10 min" },
+  { value: 15, label: "15 min" },
+  { value: 30, label: "30 min" },
+];
 
 export default function SettingsScreen() {
   const { settings, updateSettings, clearAllData } = useApp();
   const [screenTimeDone, setScreenTimeDone] = useState(false);
+
+  // Mirror notification permission status locally so UI updates after user acts
+  const [permStatus, setPermStatus] = useState<'undetermined' | 'granted' | 'denied'>(
+    settings.notificationPermissionStatus
+  );
+
+  // Sync local permStatus whenever settings change (e.g. after onboarding)
+  useEffect(() => {
+    setPermStatus(settings.notificationPermissionStatus);
+  }, [settings.notificationPermissionStatus]);
+
+  const syncNotifs = useCallback(
+    async (overrides: Partial<typeof settings> = {}) => {
+      const merged = { ...settings, ...overrides };
+      await syncStretchReminderNotifications({
+        reminderEnabled: merged.reminderEnabled,
+        selectedReminderTimes: merged.selectedReminderTimes,
+        focusBodyAreas: merged.focusBodyAreas,
+        notificationPermissionStatus: merged.notificationPermissionStatus,
+      });
+    },
+    [settings]
+  );
 
   const toggleApp = async (id: string) => {
     if (Platform.OS !== "web") await Haptics.selectionAsync();
@@ -108,6 +138,44 @@ export default function SettingsScreen() {
       ? settings.focusBodyAreas.filter(a => a !== id)
       : [...settings.focusBodyAreas, id];
     await updateSettings({ focusBodyAreas: updated });
+    await syncNotifs({ focusBodyAreas: updated });
+  };
+
+  const toggleReminderMaster = async (enabled: boolean) => {
+    if (Platform.OS !== "web") await Haptics.selectionAsync();
+
+    // If turning ON and permission is not granted, request it first
+    if (enabled && permStatus !== 'granted') {
+      const result = await requestReminderPermissions();
+      setPermStatus(result);
+      await updateSettings({ reminderEnabled: enabled, notificationPermissionStatus: result });
+      await syncNotifs({ reminderEnabled: enabled, notificationPermissionStatus: result });
+      return;
+    }
+
+    await updateSettings({ reminderEnabled: enabled });
+    await syncNotifs({ reminderEnabled: enabled });
+  };
+
+  const toggleReminderTime = async (id: ReminderTime) => {
+    if (Platform.OS !== "web") await Haptics.selectionAsync();
+    const current = settings.selectedReminderTimes;
+    const updated = current.includes(id)
+      ? current.filter(t => t !== id)
+      : [...current, id];
+    await updateSettings({ selectedReminderTimes: updated });
+    await syncNotifs({ selectedReminderTimes: updated });
+  };
+
+  const handleOpenNotifSettings = async () => {
+    await Linking.openSettings();
+    // Re-check permission after user returns
+    const newStatus = await getReminderPermissionStatus();
+    setPermStatus(newStatus);
+    await updateSettings({ notificationPermissionStatus: newStatus });
+    if (newStatus === 'granted') {
+      await syncNotifs({ notificationPermissionStatus: newStatus });
+    }
   };
 
   const openScreenTime = async () => {
@@ -147,6 +215,16 @@ export default function SettingsScreen() {
     );
   };
 
+  const permLabel =
+    permStatus === "granted" ? "Allowed"
+    : permStatus === "denied" ? "Denied \u2014 tap to open Settings"
+    : "Not requested yet";
+
+  const permColor =
+    permStatus === "granted" ? Colors.primary
+    : permStatus === "denied" ? Colors.error
+    : Colors.textMuted;
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -154,8 +232,100 @@ export default function SettingsScreen() {
           <Text style={styles.title}>Settings</Text>
         </View>
 
-        {/* ── Screen Time ────────────────────────────── */}
+        {/* ── Reminders ────────────────────────────────── */}
         <Animated.View entering={FadeInDown.duration(380)}>
+          <Section title="REMINDERS">
+            <Row
+              icon="notifications-outline"
+              iconBg="rgba(58,122,92,0.12)"
+              label="Daily reminders"
+              sub="Get nudged to stretch at key times"
+              divider={settings.reminderEnabled}
+              right={
+                <Switch
+                  value={settings.reminderEnabled}
+                  onValueChange={toggleReminderMaster}
+                  trackColor={{ false: Colors.bgSurface, true: Colors.primary }}
+                  thumbColor={Colors.white}
+                  ios_backgroundColor={Colors.bgSurface}
+                />
+              }
+            />
+
+            {settings.reminderEnabled && (
+              <>
+                {/* Time chips */}
+                <View style={styles.reminderChipsWrap}>
+                  {REMINDER_OPTS.map(opt => {
+                    const on = settings.selectedReminderTimes.includes(opt.id);
+                    return (
+                      <Pressable
+                        key={opt.id}
+                        style={[styles.reminderChip, on && styles.reminderChipOn]}
+                        onPress={() => toggleReminderTime(opt.id)}
+                      >
+                        <Ionicons
+                          name={opt.icon as any}
+                          size={14}
+                          color={on ? Colors.white : Colors.textSecondary}
+                        />
+                        <View>
+                          <Text style={[styles.reminderChipLabel, on && { color: Colors.white }]}>
+                            {opt.label}
+                          </Text>
+                          <Text style={[styles.reminderChipSub, on && { color: "rgba(255,255,255,0.65)" }]}>
+                            {opt.sub}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                {/* Permission status */}
+                <Pressable
+                  style={styles.permRow}
+                  onPress={permStatus === "denied" ? handleOpenNotifSettings : undefined}
+                  disabled={permStatus !== "denied"}
+                >
+                  <View style={[styles.permDot, { backgroundColor: permColor }]} />
+                  <Text style={[styles.permText, { color: permColor }]}>{permLabel}</Text>
+                  {permStatus === "denied" && (
+                    <Ionicons name="chevron-forward" size={13} color={permColor} style={{ marginLeft: "auto" }} />
+                  )}
+                </Pressable>
+              </>
+            )}
+          </Section>
+        </Animated.View>
+
+        {/* ── Unlock window ─────────────────────────────── */}
+        <Animated.View entering={FadeInDown.duration(380).delay(40)}>
+          <Section title="UNLOCK WINDOW">
+            <Text style={styles.sectionSub}>
+              How long you stay unlocked after completing a stretch
+            </Text>
+            <View style={styles.goalRow}>
+              {UNLOCK_WINDOW_OPTS.map(opt => {
+                const on = settings.unlockWindowMinutes === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    style={[styles.windowChip, on && styles.windowChipOn]}
+                    onPress={() => updateSettings({ unlockWindowMinutes: opt.value })}
+                  >
+                    <Text style={[styles.windowChipText, on && styles.windowChipTextOn]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Section>
+        </Animated.View>
+
+        {/* ── Screen Time ────────────────────────────────── */}
+        <Animated.View entering={FadeInDown.duration(380).delay(80)}>
           <Section title="SCREEN TIME">
             <View style={styles.stCard}>
               <View style={styles.stHeader}>
@@ -163,9 +333,9 @@ export default function SettingsScreen() {
                   <Ionicons name="time-outline" size={22} color="#5856D6" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.stTitle}>Set App Limits</Text>
+                  <Text style={styles.stTitle}>Add a safety net</Text>
                   <Text style={styles.stBody}>
-                    Use iOS Screen Time to add hard limits on your gated apps. StretchGate uses the honor system — Screen Time adds the safety net.
+                    StretchGate runs on the honor system. For a hard limit, set an iOS Screen Time app limit as a backup.
                   </Text>
                 </View>
               </View>
@@ -183,7 +353,12 @@ export default function SettingsScreen() {
                   </View>
                 ))}
               </View>
-              <ScreenTimeStatusRow done={screenTimeDone} />
+              <View style={styles.stStatus}>
+                <View style={[styles.stDot, { backgroundColor: screenTimeDone ? Colors.primary : Colors.accentLight }]} />
+                <Text style={styles.stStatusText}>
+                  {screenTimeDone ? "Screen Time set up \u2014 nice safety net" : "Optional \u2014 honor system active by default"}
+                </Text>
+              </View>
               <Pressable style={styles.stBtn} onPress={openScreenTime}>
                 <Ionicons name="settings-outline" size={15} color={Colors.white} />
                 <Text style={styles.stBtnText}>
@@ -195,7 +370,7 @@ export default function SettingsScreen() {
         </Animated.View>
 
         {/* ── Mindful gates ────────────────────────── */}
-        <Animated.View entering={FadeInDown.duration(380).delay(60)}>
+        <Animated.View entering={FadeInDown.duration(380).delay(120)}>
           <Section title="MINDFUL GATES">
             <Text style={styles.sectionSub}>
               You commit to stretching before opening these apps.
@@ -213,7 +388,7 @@ export default function SettingsScreen() {
         </Animated.View>
 
         {/* ── Focus areas ──────────────────────────── */}
-        <Animated.View entering={FadeInDown.duration(380).delay(120)}>
+        <Animated.View entering={FadeInDown.duration(380).delay(160)}>
           <Section title="FOCUS AREAS">
             <Text style={styles.sectionSub}>
               We'll tailor stretches to these areas. Leave empty for variety.
@@ -239,7 +414,7 @@ export default function SettingsScreen() {
         </Animated.View>
 
         {/* ── Daily goal ───────────────────────────── */}
-        <Animated.View entering={FadeInDown.duration(380).delay(180)}>
+        <Animated.View entering={FadeInDown.duration(380).delay(200)}>
           <Section title="DAILY GOAL">
             <Text style={styles.sectionSub}>Target number of stretches per day</Text>
             <View style={styles.goalRow}>
@@ -283,13 +458,13 @@ export default function SettingsScreen() {
         </Animated.View>
 
         {/* ── About ────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.duration(380).delay(300)}>
+        <Animated.View entering={FadeInDown.duration(380).delay(280)}>
           <Section title="ABOUT">
             <Row
               icon="leaf-outline"
               iconBg="rgba(58,122,92,0.12)"
               label="StretchGate"
-              sub="Version 1.0 · Move before you scroll"
+              sub="Version 1.0 \u00b7 Honor system MVP \u00b7 Hard lock coming soon"
               divider
             />
             <Row
@@ -303,7 +478,7 @@ export default function SettingsScreen() {
         </Animated.View>
 
         {/* ── Danger ───────────────────────────────── */}
-        <Animated.View entering={FadeInDown.duration(380).delay(360)}>
+        <Animated.View entering={FadeInDown.duration(380).delay(320)}>
           <Section title="DANGER ZONE">
             <Row
               icon="trash-outline"
@@ -385,6 +560,43 @@ const styles = StyleSheet.create({
   goalChipOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   goalChipText: { fontSize: 16, fontFamily: "DM_Sans_700Bold", color: Colors.textSecondary },
   goalChipTextOn: { color: Colors.white },
+
+  // Reminders
+  reminderChipsWrap: {
+    paddingVertical: 12, gap: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.divider,
+  },
+  reminderChip: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 14, backgroundColor: Colors.bgSurface,
+    borderWidth: 1.5, borderColor: "transparent",
+  },
+  reminderChipOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  reminderChipLabel: {
+    fontSize: 14, fontFamily: "DM_Sans_600SemiBold",
+    color: Colors.text,
+  },
+  reminderChipSub: {
+    fontSize: 11, fontFamily: "DM_Sans_400Regular",
+    color: Colors.textMuted, marginTop: 1,
+  },
+  permRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingVertical: 10,
+  },
+  permDot: { width: 7, height: 7, borderRadius: 4 },
+  permText: { fontSize: 12, fontFamily: "DM_Sans_500Medium" },
+
+  // Unlock window
+  windowChip: {
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12,
+    backgroundColor: Colors.bgSurface,
+    borderWidth: 1.5, borderColor: "transparent",
+  },
+  windowChipOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  windowChipText: { fontSize: 14, fontFamily: "DM_Sans_600SemiBold", color: Colors.textSecondary },
+  windowChipTextOn: { color: Colors.white },
 
   // Screen Time card
   stCard: { paddingVertical: 16, gap: 14 },

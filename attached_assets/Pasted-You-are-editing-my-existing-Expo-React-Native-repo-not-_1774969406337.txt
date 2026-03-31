@@ -1,0 +1,249 @@
+You are editing my existing Expo React Native repo, not starting from scratch.
+
+Project context:
+I am building a wellness + screen-time app called StretchGate / Streach.
+The current repo is already an Expo Router + React Native app with onboarding, home, settings, progress, and stretch session screens.
+This is currently an honor-system MVP, not true iOS Screen Time interception yet.
+Your job is to analyze the existing codebase and then implement the next high-value layer of app logic and notification behavior.
+
+Important:
+Do NOT rewrite the whole app.
+Do NOT change the visual style unless needed for new UI controls.
+Do NOT introduce a giant state library unless absolutely necessary.
+Stay close to the current architecture and file structure.
+Prefer simple, typed, production-minded code.
+
+Main goal:
+Implement the next stage of app logic/state and local reminders so the app feels more real and complete.
+
+What I want you to focus on:
+1. Better app state for unlocks / reminders / persisted setup
+2. Real local notification scheduling at specific daily times
+3. Wiring onboarding choices into persistent state
+4. Improving the honor-system unlock logic
+5. Making settings actually control reminder behavior
+6. Keeping everything incremental and clean
+
+Files to inspect first:
+- artifacts/mobile/context/AppContext.tsx
+- artifacts/mobile/app/onboarding.tsx
+- artifacts/mobile/app/(tabs)/settings.tsx
+- artifacts/mobile/app/(tabs)/index.tsx
+- artifacts/mobile/app/stretch/session.tsx
+- artifacts/mobile/constants/stretches.ts
+- artifacts/mobile/app/_layout.tsx
+- artifacts/mobile/constants/colors.ts
+
+My read of the current repo:
+- AppContext currently persists settings + sessions with AsyncStorage
+- Onboarding already collects:
+  - body focus areas
+  - preferred duration
+  - daily goal
+  - “when do you scroll most?”
+  - selected apps
+  - reminder timing choices
+  - notification permission choice
+- Settings currently lets the user:
+  - choose locked apps
+  - choose focus areas
+  - set daily goal
+  - toggle haptics
+  - open iOS Screen Time settings manually
+- Home currently shows selected locked apps and manually launches a stretch session when tapped
+- Session screen records completed stretches and goes back
+- expo-notifications is already installed
+- The app is still honor-system mode only
+
+What is missing / what I want implemented:
+
+A) UPGRADE APP STATE
+
+Please improve the app state model in a practical way.
+
+Keep React Context unless you strongly need a small reducer.
+I do NOT want Redux/Zustand unless there is a very strong reason.
+
+1. Extend persisted settings so onboarding choices actually matter long-term.
+Add fields like:
+- selectedScrollTimes: ScrollTime[]
+- selectedReminderTimes: ReminderTime[]
+- notificationPermissionStatus: "undetermined" | "granted" | "denied"
+- unlockWindowMinutes: number (keep or improve current field)
+- honorSystemMode: boolean
+- lastReminderSyncAt?: string
+
+2. Add a persisted unlock state model for the honor-system.
+I want something like:
+- activeUnlocks: Record<string, {
+    appId: string;
+    appName: string;
+    unlockedAt: string;
+    expiresAt: string;
+    stretchId: string;
+    sourceSessionId?: string;
+  }>
+
+3. Add helper functions/selectors to AppContext such as:
+- isAppUnlocked(appId: string): boolean
+- getUnlockRemainingMs(appId: string): number
+- unlockAppForWindow(appId: string, appName: string, stretchId: string, minutes: number): Promise<void>
+- cleanupExpiredUnlocks(): Promise<void>
+- maybe getLockedAppsWithStatus()
+
+4. Keep the code typed and clean.
+No `any`.
+
+B) ADD A REAL LOCAL NOTIFICATION SERVICE
+
+Create a notifications service file, something like:
+- artifacts/mobile/services/notifications.ts
+
+Use expo-notifications.
+Use LOCAL notifications only.
+No remote push setup.
+No backend needed.
+
+Implement:
+- configureNotificationHandler()
+- getReminderPermissionStatus()
+- requestReminderPermissions()
+- cancelStretchReminderNotifications()
+- scheduleStretchReminderNotifications(...)
+- syncStretchReminderNotifications(settings)
+
+Behavior:
+- Schedule repeating daily reminders based on selected reminder times
+- Default reminder mapping:
+  - Morning = 8:00 AM
+  - Midday = 1:00 PM
+  - Evening = 8:00 PM
+- If the user turns reminders off, cancel scheduled reminders
+- If the user changes selected reminder times, cancel old reminders and recreate them
+- If permission is denied, store that state and expose it to UI
+
+Reminder copy should feel calm and useful, for example:
+- “Quick neck reset before the next scroll?”
+- “Take 30 seconds for your shoulders.”
+- “Stretch first, then scroll.”
+- “A gentle break for your wrists.”
+
+Try to generate notification copy using selected focus areas when possible.
+
+C) WIRE ONBOARDING INTO REAL PERSISTED STATE
+
+In onboarding.tsx:
+- Persist selectedScrollTimes
+- Persist selectedReminderTimes
+- Persist notification permission status
+- Persist selected apps, duration, daily goal, body areas as already done
+- When finishing onboarding:
+  - save settings
+  - if reminders are enabled, request notification permission
+  - if granted, schedule reminders
+- make the final onboarding completion actually initialize the app better
+
+Important:
+There appears to be a fake or placeholder Screen Time / Family Controls authorization step.
+Do NOT pretend real Screen Time access is working if it is not.
+If needed, relabel it more honestly as:
+- honor-system mode
+- reminder setup
+- future hard-lock support
+But do not build fake interception logic that claims to be real native blocking.
+
+D) IMPROVE SETTINGS SCREEN FUNCTIONALLY
+
+Update settings.tsx so it is not just static config.
+
+Add a reminders section:
+- master reminders toggle
+- rows or chips for Morning / Midday / Evening
+- permission status text:
+  - allowed
+  - denied
+  - not requested
+- button to open system settings if notifications are denied
+- maybe a short note explaining what reminders do
+
+Add an unlock window section:
+- allow user to pick 5 / 10 / 15 / 30 minutes
+- persist selection
+
+Keep:
+- locked apps selection
+- focus areas
+- daily goal
+- haptics
+
+Make settings actually control the live app state.
+
+E) IMPLEMENT A REAL HONOR-SYSTEM UNLOCK FLOW
+
+Right now the app launches a stretch session manually.
+I want the logic after completion to be stronger.
+
+When a user completes a stretch session for a target app:
+- record the session
+- mark that app as unlocked for the selected unlock window duration
+- persist unlock expiry
+
+On the home screen:
+- if an app is still locked, tapping it should launch a stretch session
+- if an app is currently unlocked, show that state clearly
+- show a countdown like:
+  - “Unlocked · 8m left”
+- if already unlocked, do NOT force another stretch immediately
+- maybe tapping an unlocked app shows a lightweight success state instead of relaunching the session
+
+Also:
+- clean up expired unlocks on app launch
+- clean up expired unlocks on app resume
+- clean up expired unlocks when returning to Home
+- do not leave stale unlock state in storage
+
+F) KEEP THE MVP HONEST
+
+Very important:
+This app is still an Expo honor-system MVP.
+Do NOT claim that pure JS / Expo code can truly intercept TikTok/Instagram app opens like native Screen Time frameworks.
+If there is placeholder language that implies true app interception, clean it up so the experience is honest:
+- “mindful gates”
+- “honor-system mode”
+- “hard lock support coming later”
+That is okay for now.
+
+G) IMPLEMENTATION STYLE
+
+Please code in a senior, practical way:
+- minimal churn
+- small clean abstractions
+- TypeScript-first
+- preserve current design system and colors
+- preserve current navigation
+- avoid unnecessary dependencies
+- add comments only where logic is non-obvious
+
+What I want from you in your response:
+1. First, briefly summarize what is currently missing in the repo
+2. Then give a short implementation plan
+3. Then make the code changes
+4. After changes, list every file you changed and why
+5. Then give manual testing steps
+
+Manual test cases I want covered:
+- onboarding with reminders ON and permission granted
+- onboarding with reminders ON and permission denied
+- onboarding with reminders OFF
+- editing reminder times in settings
+- session completion unlocks target app
+- unlocked app expires after chosen window
+- app relaunch clears expired unlocks
+- settings toggle turns reminders off and cancels scheduled notifications
+
+Strong preference:
+Please keep this as an incremental upgrade of the current repo, not a rewrite.
+If you think a tiny reducer is justified inside AppContext, that is fine.
+But do not over-engineer it.
+
+If you need to make assumptions, choose the most MVP-friendly path and say what you assumed.

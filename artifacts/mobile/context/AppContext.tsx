@@ -1,6 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { BodyArea, STRETCHES, Stretch } from '@/constants/stretches';
+import { ReminderTime } from '@/services/notifications';
+
+export type ScrollTime = 'morning' | 'midday' | 'evening' | 'night';
 
 export interface StretchSession {
   id: string;
@@ -9,6 +12,15 @@ export interface StretchSession {
   completedAt: string;
   durationSeconds: number;
   targetApp?: string;
+}
+
+export interface UnlockRecord {
+  appId: string;
+  appName: string;
+  unlockedAt: string;
+  expiresAt: string;
+  stretchId: string;
+  sourceSessionId?: string;
 }
 
 export interface AppSettings {
@@ -20,13 +32,18 @@ export interface AppSettings {
   hapticEnabled: boolean;
   reminderEnabled: boolean;
   unlockWindowMinutes: number;
-  isLockActive: boolean;
-  lastUnlockedAt?: string;
+  // Extended fields
+  selectedScrollTimes: ScrollTime[];
+  selectedReminderTimes: ReminderTime[];
+  notificationPermissionStatus: 'undetermined' | 'granted' | 'denied';
+  honorSystemMode: boolean;
+  lastReminderSyncAt?: string;
 }
 
 interface AppContextValue {
   settings: AppSettings;
   sessions: StretchSession[];
+  activeUnlocks: Record<string, UnlockRecord>;
   todayCount: number;
   currentStreak: number;
   totalSessions: number;
@@ -34,6 +51,11 @@ interface AppContextValue {
   updateSettings: (updates: Partial<AppSettings>) => Promise<void>;
   recordSession: (session: Omit<StretchSession, 'id' | 'completedAt'>) => Promise<void>;
   clearAllData: () => Promise<void>;
+  // Unlock helpers
+  isAppUnlocked: (appId: string) => boolean;
+  getUnlockRemainingMs: (appId: string) => number;
+  unlockAppForWindow: (appId: string, appName: string, stretchId: string, sourceSessionId?: string) => Promise<void>;
+  cleanupExpiredUnlocks: () => Promise<void>;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -45,13 +67,16 @@ const DEFAULT_SETTINGS: AppSettings = {
   hapticEnabled: true,
   reminderEnabled: false,
   unlockWindowMinutes: 15,
-  isLockActive: false,
-  lastUnlockedAt: undefined,
+  selectedScrollTimes: [],
+  selectedReminderTimes: [],
+  notificationPermissionStatus: 'undetermined',
+  honorSystemMode: true,
 };
 
 const STORAGE_KEYS = {
   SETTINGS: '@stretchgate/settings',
   SESSIONS: '@stretchgate/sessions',
+  UNLOCKS: '@stretchgate/unlocks',
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -92,20 +117,49 @@ function calculateStreak(sessions: StretchSession[]): number {
   return streak;
 }
 
+function removeExpiredUnlocks(
+  unlocks: Record<string, UnlockRecord>
+): Record<string, UnlockRecord> {
+  const now = Date.now();
+  const result: Record<string, UnlockRecord> = {};
+  for (const [id, record] of Object.entries(unlocks)) {
+    if (new Date(record.expiresAt).getTime() > now) {
+      result[id] = record;
+    }
+  }
+  return result;
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [sessions, setSessions] = useState<StretchSession[]>([]);
+  const [activeUnlocks, setActiveUnlocks] = useState<Record<string, UnlockRecord>>({});
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [settingsData, sessionsData] = await Promise.all([
+        const [settingsData, sessionsData, unlocksData] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.SETTINGS),
           AsyncStorage.getItem(STORAGE_KEYS.SESSIONS),
+          AsyncStorage.getItem(STORAGE_KEYS.UNLOCKS),
         ]);
-        if (settingsData) setSettings(JSON.parse(settingsData));
+
+        if (settingsData) {
+          // Merge stored settings with defaults so new fields are always present
+          setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(settingsData) });
+        }
         if (sessionsData) setSessions(JSON.parse(sessionsData));
+
+        if (unlocksData) {
+          const parsed: Record<string, UnlockRecord> = JSON.parse(unlocksData);
+          // Remove expired unlocks immediately on load
+          const cleaned = removeExpiredUnlocks(parsed);
+          setActiveUnlocks(cleaned);
+          if (Object.keys(cleaned).length !== Object.keys(parsed).length) {
+            await AsyncStorage.setItem(STORAGE_KEYS.UNLOCKS, JSON.stringify(cleaned));
+          }
+        }
       } catch (e) {
         console.error('Failed to load app data', e);
       } finally {
@@ -145,9 +199,68 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const clearAllData = useCallback(async () => {
-    await AsyncStorage.multiRemove([STORAGE_KEYS.SETTINGS, STORAGE_KEYS.SESSIONS]);
+    await AsyncStorage.multiRemove([
+      STORAGE_KEYS.SETTINGS,
+      STORAGE_KEYS.SESSIONS,
+      STORAGE_KEYS.UNLOCKS,
+    ]);
     setSettings(DEFAULT_SETTINGS);
     setSessions([]);
+    setActiveUnlocks({});
+  }, []);
+
+  // ── Unlock helpers ────────────────────────────────────────────────
+
+  const isAppUnlocked = useCallback(
+    (appId: string): boolean => {
+      const record = activeUnlocks[appId];
+      if (!record) return false;
+      return new Date(record.expiresAt).getTime() > Date.now();
+    },
+    [activeUnlocks]
+  );
+
+  const getUnlockRemainingMs = useCallback(
+    (appId: string): number => {
+      const record = activeUnlocks[appId];
+      if (!record) return 0;
+      return Math.max(0, new Date(record.expiresAt).getTime() - Date.now());
+    },
+    [activeUnlocks]
+  );
+
+  const unlockAppForWindow = useCallback(
+    async (appId: string, appName: string, stretchId: string, sourceSessionId?: string) => {
+      const now = new Date();
+      const expiresAt = new Date(
+        now.getTime() + settings.unlockWindowMinutes * 60 * 1000
+      );
+      const record: UnlockRecord = {
+        appId,
+        appName,
+        unlockedAt: now.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        stretchId,
+        sourceSessionId,
+      };
+      setActiveUnlocks(prev => {
+        const updated = { ...prev, [appId]: record };
+        AsyncStorage.setItem(STORAGE_KEYS.UNLOCKS, JSON.stringify(updated));
+        return updated;
+      });
+    },
+    [settings.unlockWindowMinutes]
+  );
+
+  const cleanupExpiredUnlocks = useCallback(async () => {
+    setActiveUnlocks(prev => {
+      const cleaned = removeExpiredUnlocks(prev);
+      if (Object.keys(cleaned).length !== Object.keys(prev).length) {
+        AsyncStorage.setItem(STORAGE_KEYS.UNLOCKS, JSON.stringify(cleaned));
+        return cleaned;
+      }
+      return prev;
+    });
   }, []);
 
   const today = getTodayISO();
@@ -159,6 +272,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider value={{
       settings,
       sessions,
+      activeUnlocks,
       todayCount,
       currentStreak,
       totalSessions,
@@ -166,6 +280,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       updateSettings,
       recordSession,
       clearAllData,
+      isAppUnlocked,
+      getUnlockRemainingMs,
+      unlockAppForWindow,
+      cleanupExpiredUnlocks,
     }}>
       {children}
     </AppContext.Provider>

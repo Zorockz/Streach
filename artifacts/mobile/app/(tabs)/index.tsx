@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
-import React from "react";
+import { router, useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Platform,
   Pressable,
@@ -46,7 +46,7 @@ function StartButton({ onPress }: { onPress: () => void }) {
           </View>
           <View>
             <Text style={styles.startTitle}>Start a Stretch</Text>
-            <Text style={styles.startSub}>30 seconds of movement</Text>
+            <Text style={styles.startSub}>Move before you scroll</Text>
           </View>
         </View>
         <View style={styles.startArrow}>
@@ -57,8 +57,26 @@ function StartButton({ onPress }: { onPress: () => void }) {
   );
 }
 
+function formatRemainingTime(ms: number): string {
+  const totalSecs = Math.ceil(ms / 1000);
+  const mins = Math.floor(totalSecs / 60);
+  const secs = totalSecs % 60;
+  if (mins > 0) return `${mins}m left`;
+  return `${secs}s left`;
+}
+
 export default function HomeScreen() {
-  const { settings, sessions, todayCount, currentStreak, totalSessions } = useApp();
+  const {
+    settings,
+    sessions,
+    todayCount,
+    currentStreak,
+    totalSessions,
+    isAppUnlocked,
+    getUnlockRemainingMs,
+    cleanupExpiredUnlocks,
+  } = useApp();
+
   const lockedApps = DISTRACTING_APPS.filter(a => settings.lockedApps.includes(a.id));
   const progress = Math.min(todayCount / (settings.dailyGoal || 3), 1);
   const goalMet = todayCount >= (settings.dailyGoal || 3);
@@ -67,9 +85,35 @@ export default function HomeScreen() {
 
   const recentIds = sessions.slice(0, 3).map(s => s.stretchId);
 
+  // Countdown ticker — re-renders every 10s so unlock timers update
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 10000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Clean up expired unlocks every time this tab gains focus
+  useFocusEffect(
+    useCallback(() => {
+      cleanupExpiredUnlocks();
+    }, [cleanupExpiredUnlocks])
+  );
+
   const handleStart = () => {
     const s = getRandomStretch(settings.focusBodyAreas, recentIds, settings.preferredDuration);
     router.push({ pathname: "/stretch/session", params: { stretchId: s.id } });
+  };
+
+  const handleAppPress = (app: typeof DISTRACTING_APPS[0]) => {
+    if (isAppUnlocked(app.id)) {
+      // Already unlocked — tapping it does nothing extra; badge shows remaining time
+      return;
+    }
+    const s = getRandomStretch(settings.focusBodyAreas, recentIds, settings.preferredDuration);
+    router.push({
+      pathname: "/stretch/session",
+      params: { stretchId: s.id, targetApp: app.name, targetAppId: app.id },
+    });
   };
 
   return (
@@ -140,7 +184,7 @@ export default function HomeScreen() {
           ))}
         </Animated.View>
 
-        {/* Mindful apps */}
+        {/* Mindful gates */}
         {lockedApps.length > 0 ? (
           <Animated.View entering={FadeInDown.duration(450).delay(240)} style={styles.card}>
             <View style={styles.cardHeader}>
@@ -152,21 +196,40 @@ export default function HomeScreen() {
                 <Text style={styles.editLink}>Edit</Text>
               </Pressable>
             </View>
-            <Text style={styles.cardSub}>Stretch before you open these — honor system</Text>
+            <Text style={styles.cardSub}>
+              Honor system \u00b7 stretch before you scroll
+            </Text>
             <View style={styles.appsWrap}>
-              {lockedApps.map(app => (
-                <Pressable
-                  key={app.id}
-                  style={styles.appChip}
-                  onPress={() => {
-                    const s = getRandomStretch(settings.focusBodyAreas, recentIds, settings.preferredDuration);
-                    router.push({ pathname: "/stretch/session", params: { stretchId: s.id, targetApp: app.name } });
-                  }}
-                >
-                  <Ionicons name={app.icon as any} size={13} color={Colors.textSecondary} />
-                  <Text style={styles.appChipText}>{app.name}</Text>
-                </Pressable>
-              ))}
+              {lockedApps.map(app => {
+                const unlocked = isAppUnlocked(app.id);
+                const remainingMs = unlocked ? getUnlockRemainingMs(app.id) : 0;
+                return (
+                  <Pressable
+                    key={app.id}
+                    style={[styles.appChip, unlocked && styles.appChipUnlocked]}
+                    onPress={() => handleAppPress(app)}
+                    accessibilityLabel={
+                      unlocked
+                        ? `${app.name} unlocked, ${formatRemainingTime(remainingMs)}`
+                        : `Tap to stretch before opening ${app.name}`
+                    }
+                  >
+                    {unlocked ? (
+                      <Ionicons name="lock-open-outline" size={13} color={Colors.accent} />
+                    ) : (
+                      <Ionicons name={app.icon as any} size={13} color={Colors.textSecondary} />
+                    )}
+                    <Text style={[styles.appChipText, unlocked && styles.appChipTextUnlocked]}>
+                      {app.name}
+                    </Text>
+                    {unlocked && (
+                      <Text style={styles.unlockBadge}>
+                        {formatRemainingTime(remainingMs)}
+                      </Text>
+                    )}
+                  </Pressable>
+                );
+              })}
             </View>
           </Animated.View>
         ) : (
@@ -275,8 +338,18 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 6,
     backgroundColor: Colors.bgSurface, paddingHorizontal: 12,
     paddingVertical: 7, borderRadius: 20,
+    borderWidth: 1, borderColor: "transparent",
+  },
+  appChipUnlocked: {
+    backgroundColor: Colors.accentMuted,
+    borderColor: Colors.accent + "40",
   },
   appChipText: { fontSize: 12, fontFamily: "DM_Sans_500Medium", color: Colors.textSecondary },
+  appChipTextUnlocked: { color: Colors.accent },
+  unlockBadge: {
+    fontSize: 11, fontFamily: "DM_Sans_600SemiBold",
+    color: Colors.accent, marginLeft: 2,
+  },
   setupRow: {
     backgroundColor: Colors.bgCard, borderRadius: 18, padding: 16,
     flexDirection: "row", alignItems: "center", gap: 14,
