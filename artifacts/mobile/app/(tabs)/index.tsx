@@ -72,6 +72,7 @@ export default function HomeScreen() {
     todayCount,
     currentStreak,
     totalSessions,
+    isStreakAtRisk,
     isAppUnlocked,
     getUnlockRemainingMs,
     cleanupExpiredUnlocks,
@@ -139,6 +140,24 @@ export default function HomeScreen() {
         <Animated.View entering={FadeInDown.duration(450).delay(60)}>
           <StartButton onPress={handleStart} />
         </Animated.View>
+
+        {/* Streak at-risk banner */}
+        {isStreakAtRisk && (
+          <Animated.View entering={FadeInDown.duration(400).delay(30)}>
+            <Pressable style={styles.streakBanner} onPress={handleStart}>
+              <Ionicons name="flame" size={18} color={Colors.accent} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.streakBannerTitle}>
+                  Don\u2019t break your {currentStreak}-day streak
+                </Text>
+                <Text style={styles.streakBannerSub}>
+                  One quick stretch keeps it alive
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={15} color={Colors.accent} />
+            </Pressable>
+          </Animated.View>
+        )}
 
         {/* Daily goal card */}
         <Animated.View entering={FadeInDown.duration(450).delay(120)} style={styles.card}>
@@ -359,4 +378,18 @@ const styles = StyleSheet.create({
   setupText: { flex: 1 },
   setupTitle: { fontSize: 14, fontFamily: "DM_Sans_600SemiBold", color: Colors.text, marginBottom: 2 },
   setupSub: { fontSize: 12, fontFamily: "DM_Sans_400Regular", color: Colors.textMuted },
+  streakBanner: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: Colors.accentMuted,
+    borderRadius: 16, padding: 14, marginBottom: 12,
+    borderWidth: 1, borderColor: Colors.accent + "30",
+  },
+  streakBannerTitle: {
+    fontSize: 13, fontFamily: "DM_Sans_600SemiBold",
+    color: Colors.accent, marginBottom: 2,
+  },
+  streakBannerSub: {
+    fontSize: 11, fontFamily: "DM_Sans_400Regular",
+    color: Colors.accent, opacity: 0.75,
+  },
 });

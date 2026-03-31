@@ -4,15 +4,23 @@ import { BodyArea } from '@/constants/stretches';
 
 export type ReminderTime = 'morning' | 'midday' | 'evening';
 
-const REMINDER_HOURS: Record<ReminderTime, number> = {
-  morning: 8,
-  midday: 13,
-  evening: 20,
+export interface ReminderHourConfig {
+  hour: number;
+  minute: number;
+}
+
+export const DEFAULT_REMINDER_HOURS: Record<ReminderTime, ReminderHourConfig> = {
+  morning: { hour: 8, minute: 0 },
+  midday:  { hour: 13, minute: 0 },
+  evening: { hour: 20, minute: 0 },
 };
 
-const NOTIFICATION_ID_PREFIX = 'stretchgate-reminder-';
+// Notification identifier namespaces
+const REMINDER_PREFIX = 'stretchgate-reminder-';
+const EXPIRY_PREFIX   = 'stretchgate-expiry-';
+const STREAK_ID       = 'stretchgate-streak';
 
-// Copy bank keyed by body area — falls back to generic copy
+// ── Copy bank ────────────────────────────────────────────────────────
 const AREA_COPY: Partial<Record<BodyArea, string[]>> = {
   neck: [
     'Quick neck reset before the next scroll?',
@@ -25,14 +33,14 @@ const AREA_COPY: Partial<Record<BodyArea, string[]>> = {
     'Your shoulders could use a moment.',
   ],
   back: [
-    'A gentle back stretch — then you scroll.',
+    'A gentle back stretch \u2014 then you scroll.',
     'Two minutes for your spine. You\u2019ll feel it.',
     'Back stretch first, then scroll.',
   ],
   wrists: [
     'A gentle break for your wrists.',
     'Quick wrist circles before the feed?',
-    'Wrist stretch — 20 seconds, that\u2019s all.',
+    'Wrist stretch \u2014 20 seconds, that\u2019s all.',
   ],
   hips: [
     'Hip opener first, feed after.',
@@ -52,18 +60,24 @@ const GENERIC_COPY = [
   'Take 30 seconds for your shoulders.',
   'A gentle break for your wrists.',
   'One stretch before you open the app?',
-  'Move a little — then pick up the phone.',
+  'Move a little \u2014 then pick up the phone.',
 ];
 
-function pickCopy(focusAreas: BodyArea[]): { title: string; body: string } {
+const STREAK_COPY = [
+  "Don\u2019t break the streak \u2014 one quick stretch?",
+  "Still time to stretch today. Don\u2019t lose your streak.",
+  "Your streak is waiting. 30 seconds is all it takes.",
+  "One move before midnight keeps the streak alive.",
+];
+
+function pickCopy(focusAreas: BodyArea[]): string {
   const pool: string[] = [];
   for (const area of focusAreas) {
     const lines = AREA_COPY[area];
     if (lines) pool.push(...lines);
   }
   const source = pool.length > 0 ? pool : GENERIC_COPY;
-  const text = source[Math.floor(Math.random() * source.length)];
-  return { title: 'StretchGate', body: text };
+  return source[Math.floor(Math.random() * source.length)];
 }
 
 // ── Handler (call once at app startup) ────────────────────────────────
@@ -104,61 +118,162 @@ export async function requestReminderPermissions(): Promise<
   }
 }
 
-// ── Schedule helpers ─────────────────────────────────────────────────
+// ── Daily reminder scheduling ─────────────────────────────────────────
 export async function cancelStretchReminderNotifications(): Promise<void> {
   if (Platform.OS === 'web') return;
   try {
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-    const ours = scheduled.filter(n =>
-      n.identifier.startsWith(NOTIFICATION_ID_PREFIX)
-    );
     await Promise.all(
-      ours.map(n => Notifications.cancelScheduledNotificationAsync(n.identifier))
+      scheduled
+        .filter(n => n.identifier.startsWith(REMINDER_PREFIX))
+        .map(n => Notifications.cancelScheduledNotificationAsync(n.identifier))
     );
-  } catch {
-    // non-fatal
-  }
+  } catch { /* non-fatal */ }
 }
 
 export async function scheduleStretchReminderNotifications(
   reminderTimes: ReminderTime[],
-  focusAreas: BodyArea[]
+  focusAreas: BodyArea[],
+  customHours: Partial<Record<ReminderTime, ReminderHourConfig>> = {}
 ): Promise<void> {
   if (Platform.OS === 'web') return;
   await cancelStretchReminderNotifications();
   for (const time of reminderTimes) {
-    const hour = REMINDER_HOURS[time];
-    const { title, body } = pickCopy(focusAreas);
+    const cfg = customHours[time] ?? DEFAULT_REMINDER_HOURS[time];
     await Notifications.scheduleNotificationAsync({
-      identifier: `${NOTIFICATION_ID_PREFIX}${time}`,
-      content: { title, body, sound: false },
+      identifier: `${REMINDER_PREFIX}${time}`,
+      content: {
+        title: 'StretchGate',
+        body: pickCopy(focusAreas),
+        sound: false,
+      },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour,
-        minute: 0,
+        hour: cfg.hour,
+        minute: cfg.minute,
       },
     });
   }
 }
 
-// ── Master sync (call whenever settings change) ───────────────────────
+// ── Streak protection notification ────────────────────────────────────
+export async function scheduleStreakProtectionNotification(
+  streakCount: number,
+  hour: number = 21,
+  minute: number = 0
+): Promise<void> {
+  if (Platform.OS === 'web' || streakCount <= 0) return;
+  try {
+    // Cancel any existing streak notif first
+    await cancelStreakProtectionNotification();
+    const body = STREAK_COPY[Math.floor(Math.random() * STREAK_COPY.length)];
+    await Notifications.scheduleNotificationAsync({
+      identifier: STREAK_ID,
+      content: {
+        title: `\uD83D\uDD25 ${streakCount}-day streak`,
+        body,
+        sound: false,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour,
+        minute,
+      },
+    });
+  } catch { /* non-fatal */ }
+}
+
+export async function cancelStreakProtectionNotification(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    await Notifications.cancelScheduledNotificationAsync(STREAK_ID);
+  } catch { /* non-fatal */ }
+}
+
+// ── Unlock expiry alerts ──────────────────────────────────────────────
+
+/** Schedule a local notification N minutes before the unlock expires. */
+export async function scheduleUnlockExpiryAlert(
+  appId: string,
+  appName: string,
+  expiresAt: string,
+  warningMinutes: number = 2
+): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const expiryMs = new Date(expiresAt).getTime();
+    const triggerMs = expiryMs - warningMinutes * 60 * 1000;
+    const nowMs = Date.now();
+
+    // Only schedule if the trigger time is in the future
+    if (triggerMs <= nowMs) return;
+
+    await Notifications.scheduleNotificationAsync({
+      identifier: `${EXPIRY_PREFIX}${appId}`,
+      content: {
+        title: `${appName} gate closing soon`,
+        body: `Your ${warningMinutes}-minute window is almost up. Stretch again to extend it.`,
+        sound: false,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: new Date(triggerMs),
+      },
+    });
+  } catch { /* non-fatal */ }
+}
+
+export async function cancelUnlockExpiryAlert(appId: string): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    await Notifications.cancelScheduledNotificationAsync(`${EXPIRY_PREFIX}${appId}`);
+  } catch { /* non-fatal */ }
+}
+
+export async function cancelAllUnlockExpiryAlerts(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    await Promise.all(
+      scheduled
+        .filter(n => n.identifier.startsWith(EXPIRY_PREFIX))
+        .map(n => Notifications.cancelScheduledNotificationAsync(n.identifier))
+    );
+  } catch { /* non-fatal */ }
+}
+
+// ── Master sync ───────────────────────────────────────────────────────
 export interface NotificationSyncSettings {
   reminderEnabled: boolean;
   selectedReminderTimes: ReminderTime[];
   focusBodyAreas: BodyArea[];
   notificationPermissionStatus: 'undetermined' | 'granted' | 'denied';
+  reminderHours?: Partial<Record<ReminderTime, ReminderHourConfig>>;
+  streakNotifEnabled?: boolean;
+  streakCount?: number;
+  streakNotifHour?: number;
 }
 
 export async function syncStretchReminderNotifications(
-  settings: NotificationSyncSettings
+  s: NotificationSyncSettings
 ): Promise<void> {
   if (Platform.OS === 'web') return;
-  const { reminderEnabled, selectedReminderTimes, focusBodyAreas, notificationPermissionStatus } =
-    settings;
 
-  if (!reminderEnabled || notificationPermissionStatus !== 'granted' || selectedReminderTimes.length === 0) {
+  // Daily stretch reminders
+  if (!s.reminderEnabled || s.notificationPermissionStatus !== 'granted' || s.selectedReminderTimes.length === 0) {
     await cancelStretchReminderNotifications();
-    return;
+  } else {
+    await scheduleStretchReminderNotifications(
+      s.selectedReminderTimes,
+      s.focusBodyAreas,
+      s.reminderHours
+    );
   }
-  await scheduleStretchReminderNotifications(selectedReminderTimes, focusBodyAreas);
+
+  // Streak notifications
+  if (s.streakNotifEnabled && s.notificationPermissionStatus === 'granted' && (s.streakCount ?? 0) > 0) {
+    await scheduleStreakProtectionNotification(s.streakCount ?? 0, s.streakNotifHour ?? 21);
+  } else {
+    await cancelStreakProtectionNotification();
+  }
 }
