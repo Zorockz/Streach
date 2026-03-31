@@ -499,7 +499,7 @@ function FocusAreasStep({
           {"Where do you\nhold tension?"}
         </Reanimated.Text>
         <Reanimated.Text entering={FadeInDown.duration(400).delay(80)} style={sh.stepSub}>
-          We\u2019ll prioritize stretches for these areas.
+          {"We'll prioritize stretches for these areas."}
         </Reanimated.Text>
       </View>
       <View style={sh.pillGrid}>
@@ -691,7 +691,7 @@ function BestTimeStep({
           {"When do you\nscroll most?"}
         </Reanimated.Text>
         <Reanimated.Text entering={FadeInDown.duration(400).delay(80)} style={sh.stepSub}>
-          We\u2019ll be ready when the urge hits.
+          {"We'll be ready when the urge hits."}
         </Reanimated.Text>
       </View>
       <View style={{ paddingHorizontal: 24, gap: 12 }}>
@@ -821,9 +821,7 @@ function HonorSystemStep({ onNext }: { onNext: () => void }) {
           This runs on trust.
         </Reanimated.Text>
         <Reanimated.Text entering={FadeInDown.duration(500).delay(100)} style={hs.body}>
-          We don\u2019t actually block your apps. You do \u2014 by choosing to stretch before you scroll.
-          {"\n\n"}
-          No surveillance. No screen time locks. Just you keeping your word to yourself.
+          {"We don't actually block your apps. You do \u2014 by choosing to stretch before you scroll.\n\nNo surveillance. No screen time locks. Just you keeping your word to yourself."}
         </Reanimated.Text>
       </View>
       <View style={[hs.footer, { paddingBottom: Math.max(bottom + 16, 36) }]}>
@@ -833,7 +831,7 @@ function HonorSystemStep({ onNext }: { onNext: () => void }) {
             <Text style={hs.commitText}>I commit</Text>
           </Pressable>
         </Reanimated.View>
-        <Text style={hs.sub}>You\u2019re building a new habit, not breaking old locks.</Text>
+        <Text style={hs.sub}>{"You're building a new habit, not breaking old locks."}</Text>
       </View>
     </View>
   );
@@ -1134,7 +1132,7 @@ function PermissionsStep({
           )}
         </Pressable>
         <Pressable style={sh.skipLink} onPress={onNext}>
-          <Text style={sh.skipLinkText}>Skip for now \u2014 I\u2019ll use honor-system mode</Text>
+          <Text style={sh.skipLinkText}>{"Skip for now \u2014 I'll use honor-system mode"}</Text>
         </Pressable>
       </View>
     </View>
@@ -1301,7 +1299,7 @@ function CompletionStep({
         <Reanimated.View style={[cp.checkBox, checkStyle]}>
           <Ionicons name="checkmark" size={52} color={Colors.white} />
         </Reanimated.View>
-        <Reanimated.Text style={[cp.heading, textStyle]}>You\u2019re ready.</Reanimated.Text>
+        <Reanimated.Text style={[cp.heading, textStyle]}>{"You're ready."}</Reanimated.Text>
         <Reanimated.Text style={[cp.sub, textStyle]}>
           Every stretch is a small win.
         </Reanimated.Text>

@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useRef } from "react";
-import { AppState, AppStateStatus } from "react-native";
+import { Animated, AppState, AppStateStatus } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AppProvider, useApp } from "@/context/AppContext";
@@ -118,25 +118,37 @@ export default function RootLayout() {
     DM_Sans_700Bold,
   });
 
+  const appOpacity = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+      SplashScreen.hideAsync()
+        .catch(() => {})
+        .finally(() => {
+          Animated.timing(appOpacity, {
+            toValue: 1,
+            duration: 700,
+            useNativeDriver: true,
+          }).start();
+        });
     }
   }, [fontsLoaded, fontError]);
 
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <SafeAreaProvider>
-      <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <AppProvider>
-              <RootNavigator />
-            </AppProvider>
-          </GestureHandlerRootView>
-        </QueryClientProvider>
-      </ErrorBoundary>
-    </SafeAreaProvider>
+    <Animated.View style={{ flex: 1, opacity: appOpacity }}>
+      <SafeAreaProvider>
+        <ErrorBoundary>
+          <QueryClientProvider client={queryClient}>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <AppProvider>
+                <RootNavigator />
+              </AppProvider>
+            </GestureHandlerRootView>
+          </QueryClientProvider>
+        </ErrorBoundary>
+      </SafeAreaProvider>
+    </Animated.View>
   );
 }

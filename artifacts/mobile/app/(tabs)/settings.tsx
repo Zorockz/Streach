@@ -284,7 +284,6 @@ const STREAK_NOTIF_HOUR_OPTS: { value: number; label: string }[] = [
 
 export default function SettingsScreen() {
   const { settings, updateSettings, clearAllData, currentStreak } = useApp();
-  const [screenTimeDone, setScreenTimeDone] = useState(false);
 
   const [permStatus, setPermStatus] = useState<'undetermined' | 'granted' | 'denied'>(
     settings.notificationPermissionStatus
@@ -385,16 +384,9 @@ export default function SettingsScreen() {
     if (Platform.OS === 'ios') {
       const url = 'App-Prefs:SCREEN_TIME';
       const supported = await Linking.canOpenURL(url).catch(() => false);
-      if (supported) {
-        await Linking.openURL(url);
-        setScreenTimeDone(true);
-      } else {
-        await Linking.openSettings();
-        setScreenTimeDone(true);
-      }
+      await Linking.openURL(supported ? url : 'App-Prefs:').catch(() => Linking.openSettings());
     } else {
       await Linking.openSettings();
-      setScreenTimeDone(true);
     }
   };
 
@@ -420,6 +412,7 @@ export default function SettingsScreen() {
     permStatus === 'granted' ? 'Allowed'
     : permStatus === 'denied' ? 'Denied \u2014 tap to open Settings'
     : 'Not requested yet';
+  // \u2014 is em-dash rendered correctly by JS engine
   const permColor =
     permStatus === 'granted' ? Colors.primary
     : permStatus === 'denied' ? Colors.error
@@ -567,7 +560,7 @@ export default function SettingsScreen() {
               iconBg="rgba(201,106,50,0.12)"
               iconColor={Colors.accent}
               label="Streak reminder"
-              sub="Alert if you haven\u2019t stretched by evening"
+              sub="Alert if you haven't stretched by evening"
               divider={settings.streakNotifEnabled}
               right={
                 <Switch
@@ -721,46 +714,16 @@ export default function SettingsScreen() {
 
         {/* ── Screen Time ───────────────────────────────────────── */}
         <Animated.View entering={FadeInDown.duration(380).delay(250)}>
-          <Section title="SCREEN TIME (OPTIONAL)">
-            <View style={styles.stCard}>
-              <View style={styles.stHeader}>
-                <View style={[styles.stIconWrap, { backgroundColor: 'rgba(88,86,214,0.12)' }]}>
-                  <Ionicons name="time-outline" size={22} color="#5856D6" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.stTitle}>Add a hard-lock safety net</Text>
-                  <Text style={styles.stBody}>
-                    StretchGate runs on the honor system. Add iOS Screen Time limits as a backup for when willpower runs low.
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.stSteps}>
-                {[
-                  'Open iOS Settings \u2192 Screen Time',
-                  'Tap \u201cApp Limits\u201d \u2192 Add Limit',
-                  'Choose your gated apps \u0026 set a low daily limit',
-                ].map((s, i) => (
-                  <View key={i} style={styles.stStep}>
-                    <View style={[styles.stStepNum, { backgroundColor: 'rgba(88,86,214,0.12)' }]}>
-                      <Text style={[styles.stStepNumText, { color: '#5856D6' }]}>{i + 1}</Text>
-                    </View>
-                    <Text style={styles.stStepText}>{s}</Text>
-                  </View>
-                ))}
-              </View>
-              <View style={styles.stStatus}>
-                <View style={[styles.stDot, { backgroundColor: screenTimeDone ? Colors.primary : Colors.accentLight }]} />
-                <Text style={styles.stStatusText}>
-                  {screenTimeDone ? 'Screen Time configured \u2014 nice safety net' : 'Optional \u2014 honor system active by default'}
-                </Text>
-              </View>
-              <Pressable style={styles.stBtn} onPress={openScreenTime}>
-                <Ionicons name="settings-outline" size={15} color={Colors.white} />
-                <Text style={styles.stBtnText}>
-                  {Platform.OS === 'ios' ? 'Open Screen Time Settings' : 'Open Settings'}
-                </Text>
-              </Pressable>
-            </View>
+          <Section title="iOS SCREEN TIME">
+            <Row
+              icon="time-outline"
+              iconBg="rgba(88,86,214,0.12)"
+              iconColor="#5856D6"
+              label="Set App Limits"
+              sub="Open iOS Screen Time to add hard daily limits for distracting apps"
+              onPress={openScreenTime}
+              divider={false}
+            />
           </Section>
         </Animated.View>
 
@@ -787,21 +750,22 @@ export default function SettingsScreen() {
           </Section>
         </Animated.View>
 
-        {/* ── About ─────────────────────────────────────────────── */}
+        {/* ── Support ───────────────────────────────────────────── */}
         <Animated.View entering={FadeInDown.duration(380).delay(330)}>
-          <Section title="ABOUT">
+          <Section title="SUPPORT">
             <Row
-              icon="leaf-outline"
-              iconBg="rgba(58,122,92,0.12)"
-              label="StretchGate"
-              sub="Version 1.0 \u00b7 Honor system MVP \u00b7 Hard lock coming soon"
+              icon="shield-checkmark-outline"
+              iconBg={Colors.primaryMuted}
+              label="Privacy Policy"
+              onPress={() => Linking.openURL('https://stretchgate.app/privacy')}
               divider
             />
             <Row
-              icon="arrow-redo-outline"
-              iconBg="rgba(58,122,92,0.12)"
-              label="Restart onboarding"
-              onPress={() => router.replace('/onboarding')}
+              icon="mail-outline"
+              iconBg={Colors.primaryMuted}
+              label="Contact Support"
+              sub="hello@stretchgate.app"
+              onPress={() => Linking.openURL('mailto:hello@stretchgate.app')}
               divider={false}
             />
           </Section>
@@ -979,36 +943,4 @@ const styles = StyleSheet.create({
   permDot: { width: 7, height: 7, borderRadius: 4 },
   permText: { fontSize: 12, fontFamily: 'DM_Sans_500Medium' },
 
-  // Screen Time card
-  stCard: { paddingVertical: 16, gap: 14 },
-  stHeader: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  stIconWrap: {
-    width: 44, height: 44, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  },
-  stTitle: { fontSize: 15, fontFamily: 'DM_Sans_700Bold', color: Colors.text, marginBottom: 4 },
-  stBody: {
-    fontSize: 12, fontFamily: 'DM_Sans_400Regular',
-    color: Colors.textMuted, lineHeight: 17,
-  },
-  stSteps: { gap: 9 },
-  stStep: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  stStepNum: {
-    width: 24, height: 24, borderRadius: 7,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  stStepNumText: { fontSize: 12, fontFamily: 'DM_Sans_700Bold' },
-  stStepText: { fontSize: 13, fontFamily: 'DM_Sans_400Regular', color: Colors.textSecondary, flex: 1 },
-  stStatus: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: Colors.bgSurface, borderRadius: 10, padding: 10,
-  },
-  stDot: { width: 8, height: 8, borderRadius: 4 },
-  stStatusText: { fontSize: 12, fontFamily: 'DM_Sans_500Medium', color: Colors.textSecondary },
-  stBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: '#5856D6',
-    borderRadius: 12, paddingVertical: 12,
-  },
-  stBtnText: { fontSize: 14, fontFamily: 'DM_Sans_700Bold', color: Colors.white },
 });
