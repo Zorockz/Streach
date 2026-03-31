@@ -1,0 +1,403 @@
+You are editing my existing iOS-first React Native / Expo repo.
+
+Use only Apple-native iOS solutions.
+Do NOT use any honor-system fallback.
+Do NOT use any fake in-app blocker.
+Do NOT use JS-only timing as the real source of truth.
+Do NOT build any custom “pretend” lock flow.
+Do NOT redesign parts of the app that already work.
+
+Only implement these 4 things:
+1. real iOS app locking using Apple Screen Time APIs
+2. real iOS local notifications using Apple notification APIs
+3. lifecycle/state handling required to support those features
+4. minimum settings wiring required to control those features
+
+Everything else must stay untouched unless absolutely required for these 4 items.
+
+==================================================
+MANDATORY TECHNOLOGY CHOICES
+==================================================
+
+Use only these iOS-native frameworks:
+
+For app locking:
+- FamilyControls
+- ManagedSettings
+- DeviceActivity
+
+For notifications:
+- UserNotifications
+
+If native iOS targets or extensions are missing, add them.
+If Expo managed workflow blocks this, convert only what is required for iOS native support.
+Do not keep this dependent on Expo Go.
+Use a custom dev client / prebuild / native iOS project if needed.
+Do not do Android work.
+
+==================================================
+DO NOT TOUCH
+==================================================
+
+Do not edit these areas unless directly required by the native implementations:
+- onboarding content and sequence
+- progress screen logic that already works
+- stretch library content
+- colors
+- typography
+- general UI styling
+- branding
+- icon/logo
+- analytics
+- paywall
+- social features
+- anything unrelated to native locking, notifications, lifecycle, or the minimum settings controls
+
+==================================================
+FIRST STEP: INSPECT BEFORE CHANGING
+==================================================
+
+Inspect these files first and summarize them before coding:
+
+- artifacts/mobile/context/AppContext.tsx
+- artifacts/mobile/app/_layout.tsx
+- artifacts/mobile/app/onboarding.tsx
+- artifacts/mobile/app/(tabs)/index.tsx
+- artifacts/mobile/app/(tabs)/settings.tsx
+- artifacts/mobile/app/stretch/session.tsx
+- artifacts/mobile/constants/stretches.ts
+- artifacts/mobile/constants/colors.ts
+- artifacts/mobile/app.json
+- app.config.js / app.config.ts if present
+- package.json files
+- iOS folder if present
+- any existing native modules
+- any assets/config related to current mobile build
+
+Before making changes, output:
+1. what already works
+2. what is missing specifically for these 4 target areas
+3. which files will remain untouched
+4. whether native iOS targets/extensions already exist or must be added
+
+==================================================
+A) REAL iOS APP LOCKING ONLY
+==================================================
+
+Replace the current honor-system app locking with real iOS Screen Time implementation.
+
+Required native architecture:
+- FamilyControls authorization
+- FamilyActivityPicker for app/category selection
+- ManagedSettingsStore for applying shields
+- DeviceActivity for scheduling relock behavior
+- required Screen Time app extensions if needed:
+  - Device Activity Monitor extension
+  - Shield Configuration extension
+  - Shield Action extension
+- App Group shared storage if needed for main app + extensions
+
+Requirements:
+
+1. Screen Time authorization
+Add a native bridge exposing:
+- requestScreenTimeAuthorization()
+- getScreenTimeAuthorizationStatus()
+
+Persist authorization status in JS state.
+
+2. Native app selection
+Use FamilyActivityPicker on iOS for choosing locked apps/categories.
+Do not use a fake JS app picker as the real lock picker.
+Persist the selected tokens in shared storage that both app and extensions can read.
+
+3. Apply shields
+Use ManagedSettingsStore to shield the selected apps/categories.
+Expose native methods:
+- setShieldSelection(selection)
+- enableGating()
+- disableGating()
+- refreshShieldState()
+
+4. Temporary unlock window
+When a stretch session is valid for a target app:
+- temporarily remove only that target app from the shield
+- keep all other selected apps shielded
+- persist:
+  - target app token/reference
+  - unlockedAt timestamp
+  - expiresAt timestamp
+- use native timing / DeviceActivity-based relock behavior
+- relock must survive foreground/background and normal app usage
+- do not rely on a JS timer to relock
+
+5. Native shield UI
+Implement the minimum Shield Configuration extension so blocked apps show Streach-specific shield text instead of a generic default, when supported.
+Keep text short and neutral.
+
+6. Shield action behavior
+Implement the cleanest supported native action flow.
+If direct open-back-into-app from shield action is not supported or is unreliable, do not fake it.
+In that case:
+- record pending context in shared storage
+- let the app resume the stretch flow on next open
+- clearly document the platform limitation in the code comments and final summary
+
+7. Source of truth
+Native iOS state must be the source of truth for:
+- whether gating is active
+- what apps are selected
+- which apps are currently temporarily unlocked
+- when unlock windows expire
+
+JS state may mirror native state for rendering only.
+
+==================================================
+B) REAL iOS LOCAL NOTIFICATIONS ONLY
+==================================================
+
+Implement local notifications using UserNotifications only.
+
+Do not use placeholder notification logic.
+Do not leave scheduling half-wired.
+
+Create a native notifications bridge exposing:
+- requestNotificationAuthorization()
+- getNotificationAuthorizationStatus()
+- scheduleDailyReminders(times)
+- cancelDailyReminders()
+- scheduleUnlockExpiryNotification(payload)
+- cancelUnlockExpiryNotification(identifier)
+- resyncNotificationsFromSettings()
+
+Requirements:
+
+1. Notification permission
+Support these statuses in JS state:
+- notDetermined
+- denied
+- authorized
+- provisional if available/applicable
+
+2. Daily reminders
+Support multiple reminder times.
+Persist them in app settings.
+When reminder times change:
+- cancel existing reminder notifications
+- recreate them
+- prevent duplicates
+
+3. Unlock expiry notifications
+Optional setting.
+When a target app is temporarily unlocked, optionally schedule one local notification near expiry or at expiry.
+
+4. Copy
+Use only calm, neutral product copy.
+Examples:
+- “Stretch reminder”
+- “A short neck reset is scheduled.”
+- “Unlock window ending soon.”
+- “Instagram returns to gated mode soon.”
+
+Avoid hype copy.
+
+==================================================
+C) LIFECYCLE / STATE HANDLING ONLY AS NEEDED
+==================================================
+
+Implement only the state/lifecycle work needed to support the native features above.
+
+Keep AppContext.
+Do not replace the whole state system.
+Do not add Redux/Zustand unless absolutely necessary, which it likely is not.
+
+Add only the minimum state needed, such as:
+- screenTimeAuthorizationStatus
+- notificationAuthorizationStatus
+- gatingActive
+- nativeSelectionConfigured
+- unlockWindowMinutes
+- reminderTimes
+- expiryAlertsEnabled
+- activeUnlocks mirrored from native state
+
+Required behavior:
+
+1. On cold app launch
+- hydrate existing JS state
+- fetch native Screen Time authorization status
+- fetch native notification permission status
+- fetch native selected apps/gating state
+- fetch active native temporary unlock windows
+- remove expired unlock records if needed
+- sync JS display state from native truth
+
+2. On foreground
+- refresh native lock state
+- refresh active unlock windows
+- refresh countdown labels from absolute timestamps
+- refresh authorization statuses
+- do not unnecessarily recreate notifications
+
+3. On background
+- persist only minimal timestamps if needed
+- no JS timer should be the real source of truth
+
+4. Countdowns
+Countdowns shown in the UI must be derived from native timestamps.
+No fake countdown logic.
+
+5. Permission changes
+If Screen Time or notification permission is changed in iOS Settings, detect it on foreground and update UI state immediately.
+
+==================================================
+D) MINIMUM SETTINGS WIRING ONLY
+==================================================
+
+Do only the minimum settings work required to control the native features above.
+
+Do not redesign the whole settings screen.
+
+Add or wire only these sections if missing:
+
+1. Screen Time access
+- status row
+- request / retry button
+- clear unavailable state if entitlement or permission is missing
+- connected state if available
+
+2. Gating active
+- one master toggle
+- wired to native enableGating / disableGating
+
+3. Locked apps
+- button that launches native FamilyActivityPicker
+- save selection
+- refresh native shield state after selection changes
+
+4. Unlock window
+- exact picker options:
+  - 5 min
+  - 10 min
+  - 15 min
+  - 30 min
+- persist selection
+- use this exact value for native temporary unlock duration
+
+5. Notifications
+- permission status row
+- request permission button
+- reminder times list
+- add/edit/remove reminder time
+- expiry alert toggle
+
+Nothing else should be changed in settings unless required for these sections to function.
+
+==================================================
+E) SESSION HANDOFF TO NATIVE UNLOCK
+==================================================
+
+Do not rewrite the whole stretch session.
+Only change the minimum required logic.
+
+When a stretch session ends:
+- validate completion against a meaningful threshold
+- if valid and a target app exists:
+  - call the native temporary unlock method for that exact app
+  - refresh active unlock state from native
+- if invalid:
+  - do not unlock the app
+  - leave lock state unchanged
+
+Keep duplicate-protection if it already exists.
+Do not add unrelated session features.
+
+==================================================
+F) FILE / MODULE STRUCTURE
+==================================================
+
+Keep changes minimal and organized.
+
+Preferred additions:
+
+Native iOS:
+- ios/.../ScreenTimeManager.swift
+- ios/.../NotificationsManager.swift
+- required Screen Time extensions:
+  - DeviceActivityMonitor extension
+  - ShieldConfiguration extension
+  - ShieldAction extension
+- App Group shared storage helpers if needed
+
+JS/TS:
+- artifacts/mobile/services/screenTime.ts
+- artifacts/mobile/services/notifications.ts
+- minimal updates to:
+  - AppContext.tsx
+  - settings.tsx
+  - index.tsx only if needed to display native lock/unlock status
+  - session.tsx only if needed to call native temporary unlock
+
+Do not move unrelated files.
+
+==================================================
+G) BUILD / ENTITLEMENT SETUP
+==================================================
+
+If the project is not yet configured for this native path:
+- add the required iOS native project setup
+- add entitlements files
+- add required extension targets/config where possible
+- add App Group setup placeholders if needed
+- do not fake missing Apple capability approval
+
+If an Apple entitlement or provisioning step is still required, leave the implementation scaffolded correctly and clearly document:
+- exactly what entitlement is needed
+- exactly which targets need it
+- exactly what must be enabled in Apple Developer / Xcode
+
+==================================================
+RESPONSE FORMAT
+==================================================
+
+Respond in this exact order:
+
+1. Repo inspection summary
+- what already works
+- what is missing for the 4 target areas
+- what you will not touch
+
+2. Native implementation plan
+- exact modules/targets/extensions to add
+- exact JS files to touch
+- exact native files to add/update
+
+3. Code changes
+- implement them directly
+- keep diffs minimal
+
+4. Changed files list
+- every file changed
+- one-line reason for each
+
+5. Build/setup notes
+- exactly what still must be enabled in Apple Developer / Xcode
+- exactly what cannot work until that is done
+
+6. Manual QA checklist
+Include:
+- request Screen Time access
+- choose apps/categories with FamilyActivityPicker
+- enable gating
+- confirm selected app is shielded
+- complete valid stretch and temporarily unlock target app
+- confirm app relocks after unlock window expires
+- allow notifications and confirm reminders schedule
+- edit reminder time and confirm old reminders are replaced
+- deny notifications and confirm UI state updates
+- background/foreground app and confirm state remains correct
+- revoke permissions in iOS Settings and confirm the app detects it
+
+7. Limitations
+- state real iOS API limitations clearly
+- do not hide them
