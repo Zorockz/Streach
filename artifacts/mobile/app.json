@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "StretchGate",
-    "slug": "mobile",
+    "slug": "stretchgate",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -16,16 +16,25 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.zorockz.Yoga",
-      "buildNumber": "1"
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSUserNotificationUsageDescription": "StretchGate sends reminders to stretch and alerts when your timed unlocks expire."
+      }
     },
     "android": {},
     "web": {
       "favicon": "./assets/images/icon.png"
     },
     "plugins": [
-      ["expo-router", { "origin": "https://replit.com/" }],
+      ["expo-router"],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "iosDisplayInForeground": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
