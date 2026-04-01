@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.stretchgate.app",
+      "bundleIdentifier": "com.zorockz.Yoga",
       "buildNumber": "1"
     },
     "android": {},
