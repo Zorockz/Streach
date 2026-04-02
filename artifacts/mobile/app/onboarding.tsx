@@ -141,7 +141,7 @@ function SplashStep({
       <Reanimated.View style={[spl.iconBox, iconStyle]}>
         <Ionicons name="leaf" size={72} color={Colors.primary} />
       </Reanimated.View>
-      <Reanimated.Text style={[spl.title, titleStyle]}>StretchGate</Reanimated.Text>
+      <Reanimated.Text style={[spl.title, titleStyle]}>Streach Gate</Reanimated.Text>
       <Reanimated.Text style={[spl.tagline, taglineStyle]}>Earn your scroll.</Reanimated.Text>
       <Reanimated.View style={[spl.chevron, chevronStyle]}>
         <Ionicons name="chevron-down" size={26} color={Colors.textMuted} />
@@ -297,7 +297,7 @@ function PromiseStep({ onNext }: { onNext: () => void }) {
       iconNode={<Ionicons name="leaf-outline" size={120} color={Colors.primary} />}
       iconAnim={pulseStyle}
       headline={"Move a little.\nScroll a lot less."}
-      body={"StretchGate doesn\u2019t punish you. It just asks you to show up for your body first."}
+      body={"Streach Gate doesn\u2019t punish you. It just asks you to show up for your body first."}
       onNext={onNext}
     />
   );
@@ -314,7 +314,7 @@ const HOW_STEPS = [
   {
     icon: "leaf-outline" as const,
     color: Colors.primary,
-    title: "StretchGate appears",
+    title: "Streach Gate appears",
     body: "A quick stretch prompt shows up. 20\u201360 seconds, guided and simple.",
   },
   {
@@ -1090,7 +1090,7 @@ function PermissionsStep({
               </View>
             </View>
             <Text style={sh.permDesc}>
-              Lets StretchGate detect when you open gated apps. Honor-system mode works without it.
+              Lets Streach Gate detect when you open gated apps. Honor-system mode works without it.
             </Text>
           </View>
         </Reanimated.View>

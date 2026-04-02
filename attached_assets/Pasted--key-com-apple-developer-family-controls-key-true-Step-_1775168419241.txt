@@ -1,0 +1,358 @@
+<key>com.apple.developer.family-controls</key>
+<true/>
+```
+
+---
+
+## Step 2 — Create the Three Required Files in Your Expo Project
+
+**Replit prompt — paste this in full:**
+```
+I have an Expo bare workflow React Native app at artifacts/mobile.
+Bundle ID is com.zorockz.Yoga. I have Apple's Family Controls (Distribution) 
+entitlement approved.
+
+Create the following new files:
+
+1. artifacts/mobile/modules/ScreenTimeManager.ts
+   TypeScript interface / stub layer. Export these async functions:
+   - requestAuthorization(): Promise<'authorized' | 'denied' | 'notDetermined'>
+   - showAppPicker(): Promise<void>
+   - blockApps(): Promise<void>
+   - unblockApps(): Promise<void>
+   - unblockTemporarily(durationSeconds: number): Promise<void>
+   - getAuthorizationStatus(): Promise<'authorized' | 'denied' | 'notDetermined'>
+   - isBlocking(): Promise<boolean>
+   
+   Each function should check if NativeModules.StretchGateModule exists.
+   If yes, call it. If no (web/simulator fallback), log a warning and resolve 
+   with a safe default.
+
+2. artifacts/mobile/modules/ScreenTimeManager.types.ts
+   Export these TypeScript types:
+   - AuthorizationStatus = 'authorized' | 'denied' | 'notDetermined'
+   - BlockingState = { isBlocking: boolean; startedAt: number | null }
+
+3. artifacts/mobile/context/ScreenTimeContext.tsx
+   React context that wraps ScreenTimeManager. Provides:
+   - authStatus: AuthorizationStatus
+   - blockingState: BlockingState
+   - requestAuth(): Promise<void>
+   - openAppPicker(): Promise<void>
+   - startBlocking(): Promise<void>
+   - stopBlocking(): Promise<void>
+   - unlockFor(seconds: number): Promise<void>
+   
+   On mount, call getAuthorizationStatus() and isBlocking() to hydrate state.
+   Wrap the main app with this context in app/_layout.tsx alongside AppProvider.
+
+Show all three files in full.
+```
+
+---
+
+## Step 3 — Build the Native Swift Module
+
+This is the core. Open Xcode, create a new Swift file in your main app target.
+
+**File:** `ios/Yoga/StretchGateModule.swift`
+
+**Replit prompt — paste this to generate the Swift code:**
+```
+Write a complete React Native Native Module in Swift called StretchGateModule
+for an app with bundle ID com.zorockz.Yoga.
+
+Requirements:
+- Use @objc and RCT_EXPORT_MODULE()
+- Import FamilyControls, ManagedSettings, SwiftUI
+- Target iOS 16+
+- All promise-based methods use RCTPromiseResolveBlock / RCTPromiseRejectBlock
+
+Methods to implement:
+
+1. requestAuthorization(resolve, reject)
+   - Calls AuthorizationCenter.shared.requestAuthorization(for: .individual)
+   - Resolves with "authorized", "denied", or "notDetermined" string
+   - Use Task { } for async/await bridging
+
+2. getAuthorizationStatus(resolve, reject)
+   - Returns AuthorizationCenter.shared.authorizationStatus as string
+
+3. showAppPicker(resolve, reject)
+   - Present a UIHostingController containing a SwiftUI view with 
+     FamilyActivityPicker
+   - The picker's selection binds to a @State var stored in a shared 
+     SelectionStore ObservableObject (singleton)
+   - On selection change, encode FamilyActivitySelection to UserDefaults 
+     key "stretchgate.selection"
+   - Resolve when picker is dismissed
+
+4. blockApps(resolve, reject)
+   - Decode FamilyActivitySelection from UserDefaults key "stretchgate.selection"
+   - Create ManagedSettingsStore(scope: .individual)
+   - Set store.shield.applications = selection.applicationTokens
+   - Set store.shield.applicationCategories = selection.categoryTokens
+   - Resolve with nil on success, reject on error
+
+5. unblockApps(resolve, reject)
+   - Create ManagedSettingsStore(scope: .individual)
+   - Call store.clearAllSettings()
+   - Resolve
+
+6. unblockTemporarily(durationSeconds: Double, resolve, reject)
+   - Call unblockApps logic
+   - Schedule DispatchQueue.main.asyncAfter(deadline: .now() + durationSeconds)
+     that calls blockApps logic again
+   - Resolve immediately after unblocking (not after re-blocking)
+
+7. isBlocking(resolve, reject)
+   - Check if ManagedSettingsStore(scope: .individual).shield.applications != nil
+   - Resolve with Bool
+
+Also create the companion Objective-C bridge file 
+ios/Yoga/StretchGateModule.m with the RCT_EXTERN_MODULE declaration 
+and all RCT_EXTERN_METHOD entries.
+
+Show both files completely.
+```
+
+---
+
+## Step 4 — Build the Shield Extension (Custom Block Screen)
+
+This is what users see when they try to open Instagram and your app intercepts it.
+
+**In Xcode:**
+1. File → New → Target
+2. Choose **Shield Configuration Extension**
+3. Name it `ShieldConfiguration`
+4. Bundle ID will auto-set to `com.zorockz.Yoga.ShieldConfiguration`
+5. Apply Family Controls capability to this extension target too
+
+**Replit prompt — generate the Shield UI:**
+```
+Write a complete SwiftUI ShieldConfigurationExtension for a Screen Time app.
+File: ios/ShieldConfiguration/ShieldConfigurationExtension.swift
+
+The shield should display:
+- Background color: #0D1F1A (dark green, the app's brand color)
+- App icon of the blocked app (use shieldConfiguration.applicationName)
+- Large text: "Time to stretch first"
+- Subtext: "Complete a 30-second stretch to unlock [app name]"
+- A single button: "Start Stretch" 
+  - This button should deep link to the main app using 
+    URL(string: "yoga://session?source=shield&app=\(applicationName)")
+  - Use UIApplication.shared.open() to trigger the deep link
+
+Implement ShieldConfigurationDataSource:
+- override func configuration(shielding application: Application) 
+  -> ShieldConfiguration
+- Return ShieldConfiguration with:
+  - backgroundBlurStyle: nil (we use our own bg)
+  - backgroundColor: UIColor(red: 0.051, green: 0.122, blue: 0.102, alpha: 1)
+  - icon: the SF Symbol "figure.flexibility" as UIImage
+  - title: ShieldConfiguration.Label(text: "Stretch first", color: .white)
+  - subtitle: ShieldConfiguration.Label(
+      text: "30 seconds to unlock \(application.localizedDisplayName ?? "this app")", 
+      color: UIColor(white: 1, alpha: 0.7))
+  - primaryButtonLabel: ShieldConfiguration.Label(text: "Start stretch", color: .white)
+  - primaryButtonBackgroundColor: UIColor(red: 0.365, green: 0.706, blue: 0.514, alpha: 1)
+  - secondaryButtonLabel: nil (no skip button)
+
+Show the complete file.
+```
+
+---
+
+## Step 5 — Handle the Deep Link Back Into the App
+
+When the user taps "Start Stretch" on the shield, it opens your app. You need to catch that URL and route to the session screen.
+
+**Replit prompt:**
+```
+In artifacts/mobile/app/_layout.tsx, add deep link handling for the 
+URL scheme "yoga://" (matching bundle ID com.zorockz.Yoga).
+
+Update app.json to add:
+  "scheme": "yoga"
+
+In _layout.tsx:
+1. Use Linking.useURL() from expo-linking to listen for incoming URLs
+2. Parse the URL — if path is "session", extract query params:
+   - source: "shield" | "manual"
+   - app: string (the app name that was blocked)
+3. If source === "shield":
+   - Store the app name in ScreenTimeContext as pendingUnlockApp
+   - Navigate to /stretch/session with params: { source: "shield", app: appName }
+4. If source === "manual":
+   - Navigate to /stretch/session normally
+
+In artifacts/mobile/app/stretch/session.tsx:
+- Accept the route params { source, app }
+- If source === "shield", after session completion:
+  1. Call unlockFor(120) from ScreenTimeContext (2-minute unlock window)
+  2. Show "Opening [AppName] now..." for 1.5 seconds  
+  3. Call Linking.openURL() with the app's URL scheme to return the user
+  4. After 3 seconds, call startBlocking() to re-lock
+- If source is not "shield", behave as before (navigate home on completion)
+
+Show the full updated _layout.tsx and session.tsx.
+```
+
+---
+
+## Step 6 — Wire the App Picker Into Settings
+
+Users need to select which apps to block. Replace the current checkbox list in settings with the native FamilyActivityPicker.
+
+**Replit prompt:**
+```
+In artifacts/mobile/app/(tabs)/settings.tsx, replace the current 
+"Distracting Apps" section entirely.
+
+New behavior:
+1. Show a card titled "Blocked Apps"
+2. Show current authorization status from ScreenTimeContext:
+   - If notDetermined: show a button "Enable App Blocking" that calls requestAuth()
+   - If denied: show text "App blocking was denied in Settings" with a button 
+     "Open Settings" that calls Linking.openURL('app-settings:')
+   - If authorized: show the current app picker state
+
+3. When authorized, show:
+   - A button "Choose apps to block" that calls openAppPicker()
+   - Below it, text: "X apps selected" (we can't show app names due to Apple 
+     privacy — FamilyActivitySelection tokens are opaque)
+   - A toggle "Blocking active" that calls startBlocking() or stopBlocking()
+
+4. Below the card, show an info text: 
+   "When blocking is active, opening a selected app will show a stretch prompt. 
+   Complete the stretch to unlock for 2 minutes."
+
+Use the existing card styling and color tokens. Do not change any other 
+settings sections. Show the complete updated settings.tsx.
+```
+
+---
+
+## Step 7 — Fix the Session Timer
+
+Do this regardless of everything above — it's a timer bug that will break the stretch flow.
+
+**Replit prompt:**
+```
+In artifacts/mobile/app/stretch/session.tsx, fix the countdown timer.
+
+Current problem: setInterval pauses when the app is backgrounded on iOS.
+
+Fix:
+1. On session start, store startTime = Date.now() in a useRef
+2. Keep the setInterval at 100ms for smooth UI
+3. On each tick: compute elapsed = Date.now() - startTimeRef.current
+   then remaining = totalDuration - elapsed
+4. Add an AppState listener from react-native:
+   - On change to 'active' (returning from background): 
+     immediately recompute elapsed and update state
+   - If elapsed >= totalDuration when returning: 
+     complete the session immediately without waiting for next tick
+5. Clear both the interval and AppState subscription in the useEffect cleanup
+
+Do not change the breathing orb animation or any other visual behavior.
+Show the complete updated session.tsx.
+```
+
+---
+
+## Step 8 — Wire Local Notifications
+
+**Replit prompt:**
+```
+Create artifacts/mobile/services/NotificationService.ts
+
+Implement and export these functions using expo-notifications:
+
+1. requestPermission(): Promise<boolean>
+   Request notification permissions. Return true if granted.
+
+2. scheduleDailyReminder(hour: number, minute: number): Promise<void>
+   Cancel any existing reminder with identifier "daily-reminder", then 
+   schedule a new repeating daily notification:
+   - identifier: "daily-reminder"
+   - title: "Stretch before you scroll"
+   - body: "Open Streach to set up your daily stretch gate."
+   - trigger: { hour, minute, repeats: true }
+
+3. scheduleStreakNudge(): Promise<void>
+   Schedule a one-time notification for 8pm today:
+   - identifier: "streak-nudge"
+   - title: "Don't break your streak"
+   - body: "You haven't stretched today yet."
+   - trigger: { hour: 20, minute: 0, repeats: false }
+   Only schedule if today's sessions count (from AsyncStorage key 
+   "sessions") has no entry for today's date.
+
+4. cancelAll(): Promise<void>
+   Calls Notifications.cancelAllScheduledNotificationsAsync()
+
+Then in artifacts/mobile/context/AppContext.tsx:
+- Import NotificationService
+- After onboarding completion (when hasOnboarded is set to true), 
+  call NotificationService.scheduleDailyReminder(9, 0)
+- After each session completion, call NotificationService.scheduleStreakNudge() 
+  which will self-cancel if the goal is already met
+
+Show NotificationService.ts in full and the specific additions to AppContext.tsx.
+```
+
+---
+
+## Step 9 — EAS Build Setup for TestFlight
+
+**Replit prompt:**
+```
+Create the following files for EAS Build configuration:
+
+1. artifacts/mobile/eas.json
+{
+  "cli": { "version": ">= 10.0.0" },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": { "simulator": false }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "buildConfiguration": "Release",
+        "bundleIdentifier": "com.zorockz.Yoga"
+      }
+    },
+    "production": {
+      "ios": {
+        "buildConfiguration": "Release",
+        "bundleIdentifier": "com.zorockz.Yoga"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "YOUR_APPLE_ID",
+        "ascAppId": "YOUR_APP_STORE_CONNECT_APP_ID",
+        "appleTeamId": "YOUR_TEAM_ID"
+      }
+    }
+  }
+}
+
+2. Update artifacts/mobile/app.json:
+- Set expo.name to "Streach"
+- Set expo.slug to "streach"  
+- Set expo.scheme to "yoga"
+- Set expo.ios.bundleIdentifier to "com.zorockz.Yoga"
+- Set expo.ios.buildNumber to "1"
+- Set expo.version to "0.1.0"
+- Add expo.ios.entitlements: { "com.apple.developer.family-controls": true }
+- Add expo.plugins array with any config plugins needed
+
+Show both files in full.

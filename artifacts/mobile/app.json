@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "StretchGate",
-    "slug": "stretchgate",
-    "version": "1.0.0",
+    "name": "Streach Gate",
+    "slug": "streach",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "stretchgate",
+    "scheme": "yoga",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -17,8 +17,11 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.zorockz.Yoga",
       "buildNumber": "1",
+      "entitlements": {
+        "com.apple.developer.family-controls": true
+      },
       "infoPlist": {
-        "NSUserNotificationUsageDescription": "StretchGate sends reminders to stretch and alerts when your timed unlocks expire."
+        "NSUserNotificationUsageDescription": "Streach Gate sends reminders to stretch and alerts when your timed unlocks expire."
       }
     },
     "android": {},
