@@ -314,7 +314,7 @@ export default function SettingsScreen() {
 
   const handleRequestFC = async () => {
     if (Platform.OS !== 'ios') return;
-    if (Platform.OS !== 'web') await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setFcLoading(true);
     try {
       const status = await requestFamilyControlsAuth();

@@ -2,10 +2,12 @@ import { Platform } from 'react-native';
 
 export type FamilyControlsStatus = 'authorized' | 'denied' | 'undetermined';
 
+let _nativeModChecked = false;
 let _nativeMod: any = null;
 
 function getNativeMod() {
-  if (_nativeMod !== undefined) return _nativeMod;
+  if (_nativeModChecked) return _nativeMod;
+  _nativeModChecked = true;
   try {
     _nativeMod = require('react-native').NativeModules.FamilyControlsModule ?? null;
   } catch {

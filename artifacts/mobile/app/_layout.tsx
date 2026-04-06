@@ -1,8 +1,8 @@
 import {
-  DM_Sans_400Regular,
-  DM_Sans_500Medium,
-  DM_Sans_600SemiBold,
-  DM_Sans_700Bold,
+  DMSans_400Regular,
+  DMSans_500Medium,
+  DMSans_600SemiBold,
+  DMSans_700Bold,
   useFonts,
 } from "@expo-google-fonts/dm-sans";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -14,6 +14,7 @@ import {
   Animated,
   AppState,
   AppStateStatus,
+  Platform,
   StyleSheet,
   View,
 } from "react-native";
@@ -148,10 +149,10 @@ function RootNavigator() {
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    DM_Sans_400Regular,
-    DM_Sans_500Medium,
-    DM_Sans_600SemiBold,
-    DM_Sans_700Bold,
+    DM_Sans_400Regular: DMSans_400Regular,
+    DM_Sans_500Medium: DMSans_500Medium,
+    DM_Sans_600SemiBold: DMSans_600SemiBold,
+    DM_Sans_700Bold: DMSans_700Bold,
   });
 
   const appOpacity = useRef(new Animated.Value(0)).current;
@@ -164,7 +165,7 @@ export default function RootLayout() {
           Animated.timing(appOpacity, {
             toValue: 1,
             duration: 700,
-            useNativeDriver: true,
+            useNativeDriver: Platform.OS !== "web",
           }).start();
         });
     }

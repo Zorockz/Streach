@@ -1410,12 +1410,13 @@ export default function OnboardingScreen() {
   const [selectedReminderTimes, setSelectedReminderTimes] = useState<ReminderTime[]>([]);
   const [notifEnabled, setNotifEnabled] = useState(true);
 
+  const isNative = Platform.OS !== 'web';
   const goNext = useCallback(() => {
-    Animated.timing(fadeAnim, { toValue: 0, duration: 220, useNativeDriver: true }).start(() => {
+    Animated.timing(fadeAnim, { toValue: 0, duration: 220, useNativeDriver: isNative }).start(() => {
       setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1));
-      Animated.timing(fadeAnim, { toValue: 1, duration: 1200, useNativeDriver: true }).start();
+      Animated.timing(fadeAnim, { toValue: 1, duration: 1200, useNativeDriver: isNative }).start();
     });
-  }, [fadeAnim]);
+  }, [fadeAnim, isNative]);
 
   // Splash auto-advance
   useEffect(() => {
@@ -1462,7 +1463,7 @@ export default function OnboardingScreen() {
       notificationPermissionStatus: permissionStatus,
     });
 
-    router.replace("/(tabs)/");
+    router.replace("/(tabs)");
   }, [
     updateSettings, selectedAreas, selectedDuration, dailyGoal,
     selectedApps, notifEnabled, selectedReminderTimes, selectedScrollTimes,
