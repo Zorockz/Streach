@@ -1,12 +1,22 @@
-import Superwall, { PaywallPresentationHandler } from '@superwall/react-native-superwall';
 import { NativeModules } from 'react-native';
+
+let SuperwallModule: any = null;
+let PaywallPresentationHandlerClass: any = null;
+
+try {
+  const mod = require('@superwall/react-native-superwall');
+  SuperwallModule = mod.default;
+  PaywallPresentationHandlerClass = mod.PaywallPresentationHandler;
+} catch {
+  // Not linked — running in Expo Go or unlinked dev build
+}
 
 const SUPERWALL_API_KEY = process.env.EXPO_PUBLIC_SUPERWALL_API_KEY ?? '';
 
 let _configured = false;
 
 function isNativeAvailable(): boolean {
-  return !!NativeModules.SuperwallReactNative;
+  return !!SuperwallModule && !!NativeModules.SuperwallReactNative;
 }
 
 export async function initSuperwall(): Promise<void> {
@@ -20,7 +30,7 @@ export async function initSuperwall(): Promise<void> {
     return;
   }
   try {
-    await Superwall.configure({ apiKey: SUPERWALL_API_KEY });
+    await SuperwallModule.configure({ apiKey: SUPERWALL_API_KEY });
     _configured = true;
   } catch (err) {
     console.warn('[Superwall] configure error:', err);
@@ -33,7 +43,7 @@ export function triggerPaywall(placement: string, onReady: () => void): void {
     return;
   }
 
-  const handler = new PaywallPresentationHandler();
+  const handler = new PaywallPresentationHandlerClass();
 
   const done = (() => {
     let called = false;
@@ -49,7 +59,7 @@ export function triggerPaywall(placement: string, onReady: () => void): void {
   handler.onDismiss(() => done());
   handler.onError(() => done());
 
-  Superwall.shared
+  SuperwallModule.shared
     .register({ placement, handler, feature: () => done() })
     .catch(() => done());
 }

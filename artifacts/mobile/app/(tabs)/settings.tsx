@@ -27,6 +27,11 @@ import {
   DEFAULT_REMINDER_HOURS,
 } from "@/services/notifications";
 import type { ReminderTime, ReminderHourConfig } from "@/services/notifications";
+import {
+  requestFamilyControlsAuth,
+  getFamilyControlsStatus,
+} from "@/services/familyControls";
+import type { FamilyControlsStatus } from "@/services/familyControls";
 
 // ── Time picker helpers ───────────────────────────────────────────────
 
@@ -291,6 +296,34 @@ export default function SettingsScreen() {
   useEffect(() => {
     setPermStatus(settings.notificationPermissionStatus);
   }, [settings.notificationPermissionStatus]);
+
+  // Family Controls state
+  const [fcStatus, setFcStatus] = useState<FamilyControlsStatus>(
+    settings.familyControlsAuthorized ? 'authorized' : 'undetermined'
+  );
+  const [fcLoading, setFcLoading] = useState(false);
+
+  useEffect(() => {
+    getFamilyControlsStatus().then(s => {
+      setFcStatus(s);
+      if (s === 'authorized' && !settings.familyControlsAuthorized) {
+        updateSettings({ familyControlsAuthorized: true });
+      }
+    });
+  }, []);
+
+  const handleRequestFC = async () => {
+    if (Platform.OS !== 'ios') return;
+    if (Platform.OS !== 'web') await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setFcLoading(true);
+    try {
+      const status = await requestFamilyControlsAuth();
+      setFcStatus(status);
+      await updateSettings({ familyControlsAuthorized: status === 'authorized' });
+    } finally {
+      setFcLoading(false);
+    }
+  };
 
   // Time picker state
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -712,15 +745,47 @@ export default function SettingsScreen() {
           </Section>
         </Animated.View>
 
-        {/* ── Screen Time ───────────────────────────────────────── */}
+        {/* ── Family Controls ───────────────────────────────────── */}
         <Animated.View entering={FadeInDown.duration(380).delay(250)}>
-          <Section title="iOS SCREEN TIME">
+          <Section title="FAMILY CONTROLS">
+            <Row
+              icon="shield-checkmark-outline"
+              iconBg={fcStatus === 'authorized' ? Colors.primaryMuted : 'rgba(201,106,50,0.12)'}
+              iconColor={fcStatus === 'authorized' ? Colors.primary : Colors.accent}
+              label="Screen Time Access"
+              sub={
+                fcStatus === 'authorized'
+                  ? 'Authorized — Streach Gate can detect gated app opens'
+                  : fcStatus === 'denied'
+                  ? 'Denied — honor-system mode is active'
+                  : 'Not yet authorized — tap to enable automatic detection'
+              }
+              divider
+              right={
+                fcStatus === 'authorized' ? (
+                  <View style={styles.statusBadge}>
+                    <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
+                    <Text style={styles.statusBadgeText}>Active</Text>
+                  </View>
+                ) : (
+                  <Pressable
+                    style={[styles.grantBtn, fcLoading && { opacity: 0.5 }]}
+                    onPress={handleRequestFC}
+                    disabled={fcLoading}
+                  >
+                    <Text style={styles.grantBtnText}>
+                      {fcLoading ? 'Requesting…' : 'Grant Access'}
+                    </Text>
+                  </Pressable>
+                )
+              }
+            />
             <Row
               icon="time-outline"
               iconBg="rgba(88,86,214,0.12)"
               iconColor="#5856D6"
-              label="Set App Limits"
-              sub="Open iOS Screen Time to add hard daily limits for distracting apps"
+              label="Open Screen Time Settings"
+              sub="Add hard daily limits for distracting apps in iOS"
               onPress={openScreenTime}
               divider={false}
             />
@@ -942,5 +1007,22 @@ const styles = StyleSheet.create({
   },
   permDot: { width: 7, height: 7, borderRadius: 4 },
   permText: { fontSize: 12, fontFamily: 'DM_Sans_500Medium' },
+
+  // Family Controls
+  statusBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: Colors.primaryMuted,
+    borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4,
+  },
+  statusBadgeText: {
+    fontSize: 11, fontFamily: 'DM_Sans_600SemiBold', color: Colors.primary,
+  },
+  grantBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5,
+  },
+  grantBtnText: {
+    fontSize: 12, fontFamily: 'DM_Sans_600SemiBold', color: Colors.white,
+  },
 
 });

@@ -39,6 +39,7 @@ import {
   syncStretchReminderNotifications,
 } from "@/services/notifications";
 import type { ReminderTime as ServiceReminderTime } from "@/services/notifications";
+import { requestFamilyControlsAuth } from "@/services/familyControls";
 
 const TOTAL_STEPS = 16;
 
@@ -1042,11 +1043,6 @@ function PermissionsStep({
   const [error, setError] = useState("");
   const { bottom } = useSafeAreaInsets();
 
-  const requestFamilyControlsAuth = async (): Promise<boolean> => {
-    await new Promise((res) => setTimeout(res, 1000));
-    return true;
-  };
-
   const handleGrant = async () => {
     if (Platform.OS !== "web")
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1056,8 +1052,8 @@ function PermissionsStep({
       if (notifOn && Platform.OS !== "web") {
         await Notifications.requestPermissionsAsync();
       }
-      const ok = await requestFamilyControlsAuth();
-      if (ok) {
+      const status = await requestFamilyControlsAuth();
+      if (status === "authorized") {
         onNext();
       } else {
         setError("Authorization failed. Please try again.");

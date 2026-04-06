@@ -51,6 +51,8 @@ export interface AppSettings {
   unlockExpiryWarningMinutes: number; // how many minutes before expiry to warn (1/2/5)
   // Gate system master toggle
   gatesActive: boolean;
+  // Family Controls
+  familyControlsAuthorized: boolean;
   // Misc
   honorSystemMode: boolean;
   sessionMinSeconds: number;    // minimum seconds for a session to count
@@ -96,6 +98,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   unlockExpiryNotifEnabled: true,
   unlockExpiryWarningMinutes: 2,
   gatesActive: true,
+  familyControlsAuthorized: false,
   honorSystemMode: true,
   sessionMinSeconds: 10,
 };
