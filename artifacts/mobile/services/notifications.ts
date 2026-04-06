@@ -1,4 +1,3 @@
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { BodyArea } from '@/constants/stretches';
 
@@ -19,6 +18,24 @@ export const DEFAULT_REMINDER_HOURS: Record<ReminderTime, ReminderHourConfig> = 
 const REMINDER_PREFIX = 'stretchgate-reminder-';
 const EXPIRY_PREFIX   = 'stretchgate-expiry-';
 const STREAK_ID       = 'stretchgate-streak';
+
+// ── Lazy-load expo-notifications so Expo Go doesn't crash at module load ──────
+type NotifModule = typeof import('expo-notifications');
+
+let _notif: NotifModule | null = null;
+let _notifChecked = false;
+
+function getNotif(): NotifModule | null {
+  if (_notifChecked) return _notif;
+  _notifChecked = true;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    _notif = require('expo-notifications') as NotifModule;
+  } catch {
+    _notif = null;
+  }
+  return _notif;
+}
 
 // ── Copy bank ────────────────────────────────────────────────────────
 const AREA_COPY: Partial<Record<BodyArea, string[]>> = {
@@ -82,15 +99,19 @@ function pickCopy(focusAreas: BodyArea[]): string {
 
 // ── Handler (call once at app startup) ────────────────────────────────
 export function configureNotificationHandler(): void {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: false,
-      shouldSetBadge: false,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
+  const Notifications = getNotif();
+  if (!Notifications) return;
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  } catch { /* non-fatal in Expo Go */ }
 }
 
 // ── Permission helpers ────────────────────────────────────────────────
@@ -98,6 +119,8 @@ export async function getReminderPermissionStatus(): Promise<
   'undetermined' | 'granted' | 'denied'
 > {
   if (Platform.OS === 'web') return 'undetermined';
+  const Notifications = getNotif();
+  if (!Notifications) return 'undetermined';
   try {
     const { status } = await Notifications.getPermissionsAsync();
     if (status === 'granted') return 'granted';
@@ -112,6 +135,8 @@ export async function requestReminderPermissions(): Promise<
   'granted' | 'denied'
 > {
   if (Platform.OS === 'web') return 'denied';
+  const Notifications = getNotif();
+  if (!Notifications) return 'denied';
   try {
     const { status } = await Notifications.requestPermissionsAsync();
     return status === 'granted' ? 'granted' : 'denied';
@@ -123,6 +148,8 @@ export async function requestReminderPermissions(): Promise<
 // ── Daily reminder scheduling ─────────────────────────────────────────
 export async function cancelStretchReminderNotifications(): Promise<void> {
   if (Platform.OS === 'web') return;
+  const Notifications = getNotif();
+  if (!Notifications) return;
   try {
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
     await Promise.all(
@@ -139,22 +166,26 @@ export async function scheduleStretchReminderNotifications(
   customHours: Partial<Record<ReminderTime, ReminderHourConfig>> = {}
 ): Promise<void> {
   if (Platform.OS === 'web') return;
+  const Notifications = getNotif();
+  if (!Notifications) return;
   await cancelStretchReminderNotifications();
   for (const time of reminderTimes) {
     const cfg = customHours[time] ?? DEFAULT_REMINDER_HOURS[time];
-    await Notifications.scheduleNotificationAsync({
-      identifier: `${REMINDER_PREFIX}${time}`,
-      content: {
-        title: 'StretchGate',
-        body: pickCopy(focusAreas),
-        sound: false,
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour: cfg.hour,
-        minute: cfg.minute,
-      },
-    });
+    try {
+      await Notifications.scheduleNotificationAsync({
+        identifier: `${REMINDER_PREFIX}${time}`,
+        content: {
+          title: 'StretchGate',
+          body: pickCopy(focusAreas),
+          sound: false,
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          hour: cfg.hour,
+          minute: cfg.minute,
+        },
+      });
+    } catch { /* non-fatal */ }
   }
 }
 
@@ -165,8 +196,9 @@ export async function scheduleStreakProtectionNotification(
   minute: number = 0
 ): Promise<void> {
   if (Platform.OS === 'web' || streakCount <= 0) return;
+  const Notifications = getNotif();
+  if (!Notifications) return;
   try {
-    // Cancel any existing streak notif first
     await cancelStreakProtectionNotification();
     const body = STREAK_COPY[Math.floor(Math.random() * STREAK_COPY.length)];
     await Notifications.scheduleNotificationAsync({
@@ -187,6 +219,8 @@ export async function scheduleStreakProtectionNotification(
 
 export async function cancelStreakProtectionNotification(): Promise<void> {
   if (Platform.OS === 'web') return;
+  const Notifications = getNotif();
+  if (!Notifications) return;
   try {
     await Notifications.cancelScheduledNotificationAsync(STREAK_ID);
   } catch { /* non-fatal */ }
@@ -194,7 +228,6 @@ export async function cancelStreakProtectionNotification(): Promise<void> {
 
 // ── Unlock expiry alerts ──────────────────────────────────────────────
 
-/** Schedule a local notification N minutes before the unlock expires. */
 export async function scheduleUnlockExpiryAlert(
   appId: string,
   appName: string,
@@ -202,14 +235,13 @@ export async function scheduleUnlockExpiryAlert(
   warningMinutes: number = 2
 ): Promise<void> {
   if (Platform.OS === 'web') return;
+  const Notifications = getNotif();
+  if (!Notifications) return;
   try {
     const expiryMs = new Date(expiresAt).getTime();
     const triggerMs = expiryMs - warningMinutes * 60 * 1000;
     const nowMs = Date.now();
-
-    // Only schedule if the trigger time is in the future
     if (triggerMs <= nowMs) return;
-
     await Notifications.scheduleNotificationAsync({
       identifier: `${EXPIRY_PREFIX}${appId}`,
       content: {
@@ -227,6 +259,8 @@ export async function scheduleUnlockExpiryAlert(
 
 export async function cancelUnlockExpiryAlert(appId: string): Promise<void> {
   if (Platform.OS === 'web') return;
+  const Notifications = getNotif();
+  if (!Notifications) return;
   try {
     await Notifications.cancelScheduledNotificationAsync(`${EXPIRY_PREFIX}${appId}`);
   } catch { /* non-fatal */ }
@@ -234,6 +268,8 @@ export async function cancelUnlockExpiryAlert(appId: string): Promise<void> {
 
 export async function cancelAllUnlockExpiryAlerts(): Promise<void> {
   if (Platform.OS === 'web') return;
+  const Notifications = getNotif();
+  if (!Notifications) return;
   try {
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
     await Promise.all(
@@ -260,8 +296,8 @@ export async function syncStretchReminderNotifications(
   s: NotificationSyncSettings
 ): Promise<void> {
   if (Platform.OS === 'web') return;
+  if (!getNotif()) return;
 
-  // Daily stretch reminders
   if (!s.reminderEnabled || s.notificationPermissionStatus !== 'granted' || s.selectedReminderTimes.length === 0) {
     await cancelStretchReminderNotifications();
   } else {
@@ -272,7 +308,6 @@ export async function syncStretchReminderNotifications(
     );
   }
 
-  // Streak notifications
   if (s.streakNotifEnabled && s.notificationPermissionStatus === 'granted' && (s.streakCount ?? 0) > 0) {
     await scheduleStreakProtectionNotification(s.streakCount ?? 0, s.streakNotifHour ?? 21);
   } else {
