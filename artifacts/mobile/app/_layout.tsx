@@ -60,7 +60,7 @@ function RootNavigator() {
     paywallTriggeredRef.current = true;
 
     initSuperwall().then(() => {
-      triggerPaywall("app_launch", () => setPaywallChecked(true));
+      triggerPaywall("Superwall Stretch APi", () => setPaywallChecked(true));
     });
   }, [isLoading, settings.hasCompletedOnboarding]);
 

@@ -24,3 +24,8 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+"Superwall Stretch APi" = "sk_6b1fe039e46c3ec5e92bfb8574d982dc18c89c4e04fa15194cd8c2d7d3548c90"

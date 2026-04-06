@@ -42,9 +42,8 @@ import type { ReminderTime as ServiceReminderTime } from "@/services/notificatio
 
 const TOTAL_STEPS = 16;
 
-// ─── Shared Next Button ───────────────────────────────────────────────────────
+// ─── Shared Tap-to-Continue ───────────────────────────────────────────────────
 function NextButton({
-  label = "Next",
   onPress,
   loading = false,
   disabled = false,
@@ -56,24 +55,24 @@ function NextButton({
 }) {
   const { bottom } = useSafeAreaInsets();
   const handlePress = async () => {
+    if (loading || disabled) return;
     if (Platform.OS !== "web")
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPress();
   };
   return (
-    <View style={[sh.nextWrap, { paddingBottom: Math.max(bottom + 16, 36) }]}>
-      <Pressable
-        style={[sh.nextBtn, (loading || disabled) && { opacity: 0.5 }]}
-        onPress={handlePress}
-        disabled={loading || disabled}
-      >
+    <Reanimated.View
+      entering={FadeInDown.duration(500).delay(1400)}
+      style={[sh.tapWrap, { paddingBottom: Math.max(bottom + 28, 44) }]}
+    >
+      <Pressable onPress={handlePress} disabled={loading || disabled}>
         {loading ? (
-          <ActivityIndicator color={Colors.white} size="small" />
+          <ActivityIndicator color={Colors.textMuted} size="small" />
         ) : (
-          <Text style={sh.nextBtnText}>{label}</Text>
+          <Text style={sh.tapText}>TAP TO CONTINUE</Text>
         )}
       </Pressable>
-    </View>
+    </Reanimated.View>
   );
 }
 
@@ -201,20 +200,20 @@ function EmotionScreen({
   onNext: () => void;
 }) {
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.bg }}>
+    <Pressable style={{ flex: 1, backgroundColor: Colors.bg }} onPress={onNext}>
       <View style={em.iconArea}>
         <Reanimated.View style={iconAnim}>{iconNode}</Reanimated.View>
       </View>
       <View style={em.textArea}>
-        <Reanimated.Text entering={FadeInDown.duration(500)} style={em.headline}>
+        <Reanimated.Text entering={FadeInDown.duration(1200)} style={em.headline}>
           {headline}
         </Reanimated.Text>
-        <Reanimated.Text entering={FadeInDown.duration(500).delay(120)} style={em.body}>
+        <Reanimated.Text entering={FadeInDown.duration(1200).delay(250)} style={em.body}>
           {body}
         </Reanimated.Text>
       </View>
       <NextButton onPress={onNext} />
-    </View>
+    </Pressable>
   );
 }
 
@@ -1416,9 +1415,9 @@ export default function OnboardingScreen() {
   const [notifEnabled, setNotifEnabled] = useState(true);
 
   const goNext = useCallback(() => {
-    Animated.timing(fadeAnim, { toValue: 0, duration: 150, useNativeDriver: true }).start(() => {
+    Animated.timing(fadeAnim, { toValue: 0, duration: 220, useNativeDriver: true }).start(() => {
       setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1));
-      Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+      Animated.timing(fadeAnim, { toValue: 1, duration: 1200, useNativeDriver: true }).start();
     });
   }, [fadeAnim]);
 
@@ -1507,6 +1506,14 @@ export default function OnboardingScreen() {
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
 const sh = StyleSheet.create({
+  tapWrap: { alignItems: "center" },
+  tapText: {
+    fontSize: 12,
+    fontFamily: "DM_Sans_500Medium",
+    color: Colors.textMuted,
+    letterSpacing: 2,
+    textTransform: "uppercase",
+  },
   nextWrap: { paddingHorizontal: 24 },
   nextBtn: {
     backgroundColor: Colors.primary,
