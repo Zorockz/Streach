@@ -7,6 +7,7 @@ import {
   FlatList,
   Linking,
   Modal,
+  NativeModules,
   Platform,
   Pressable,
   ScrollView,
@@ -747,18 +748,32 @@ export default function SettingsScreen() {
 
         {/* ── Family Controls ───────────────────────────────────── */}
         <Animated.View entering={FadeInDown.duration(380).delay(250)}>
-          <Section title="FAMILY CONTROLS">
+          <Section title="SCREEN TIME & FAMILY CONTROLS">
+            {/* Expo Go / no native module banner */}
+            {Platform.OS === 'ios' && !NativeModules.FamilyControlsModule && (
+              <View style={styles.fcInfoBanner}>
+                <Ionicons name="information-circle-outline" size={16} color="#5856D6" />
+                <Text style={styles.fcInfoText}>
+                  Automatic detection requires a custom build with the{' '}
+                  <Text style={styles.fcInfoBold}>com.apple.developer.family-controls</Text>{' '}
+                  entitlement. Honor-system mode is active in Expo Go.
+                </Text>
+              </View>
+            )}
+
             <Row
               icon="shield-checkmark-outline"
               iconBg={fcStatus === 'authorized' ? Colors.primaryMuted : 'rgba(201,106,50,0.12)'}
               iconColor={fcStatus === 'authorized' ? Colors.primary : Colors.accent}
-              label="Screen Time Access"
+              label="Apple Screen Time Access"
               sub={
                 fcStatus === 'authorized'
-                  ? 'Authorized — Streach Gate can detect gated app opens'
+                  ? 'Authorized — Streach Gate detects when gated apps open'
                   : fcStatus === 'denied'
                   ? 'Denied — honor-system mode is active'
-                  : 'Not yet authorized — tap to enable automatic detection'
+                  : Platform.OS === 'ios' && !NativeModules.FamilyControlsModule
+                  ? 'Requires a dev build — honor-system mode is active'
+                  : 'Not yet authorized — grant access for automatic detection'
               }
               divider
               right={
@@ -769,9 +784,13 @@ export default function SettingsScreen() {
                   </View>
                 ) : (
                   <Pressable
-                    style={[styles.grantBtn, fcLoading && { opacity: 0.5 }]}
+                    style={[
+                      styles.grantBtn,
+                      (fcLoading || (Platform.OS === 'ios' && !NativeModules.FamilyControlsModule))
+                        && { opacity: 0.4 },
+                    ]}
                     onPress={handleRequestFC}
-                    disabled={fcLoading}
+                    disabled={fcLoading || (Platform.OS === 'ios' && !NativeModules.FamilyControlsModule)}
                   >
                     <Text style={styles.grantBtnText}>
                       {fcLoading ? 'Requesting…' : 'Grant Access'}
@@ -780,12 +799,24 @@ export default function SettingsScreen() {
                 )
               }
             />
+
+            {/* Honor system explanation */}
+            <View style={styles.honorBox}>
+              <View style={styles.honorRow}>
+                <Ionicons name="hand-left-outline" size={15} color={Colors.textMuted} />
+                <Text style={styles.honorText}>
+                  <Text style={styles.honorBold}>Honor system mode</Text>
+                  {' '}— Without Screen Time access, open Streach Gate manually before scrolling. The habit still builds.
+                </Text>
+              </View>
+            </View>
+
             <Row
               icon="time-outline"
               iconBg="rgba(88,86,214,0.12)"
               iconColor="#5856D6"
-              label="Open Screen Time Settings"
-              sub="Add hard daily limits for distracting apps in iOS"
+              label="Open iOS Screen Time Settings"
+              sub="Set hard daily limits for distracting apps"
               onPress={openScreenTime}
               divider={false}
             />
@@ -1023,6 +1054,38 @@ const styles = StyleSheet.create({
   },
   grantBtnText: {
     fontSize: 12, fontFamily: 'DM_Sans_600SemiBold', color: Colors.white,
+  },
+
+  // Family Controls info banner (Expo Go warning)
+  fcInfoBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: 'rgba(88,86,214,0.08)',
+    borderRadius: 10, padding: 10, marginBottom: 4,
+    borderWidth: 1, borderColor: 'rgba(88,86,214,0.18)',
+  },
+  fcInfoText: {
+    flex: 1, fontSize: 11.5, fontFamily: 'DM_Sans_400Regular',
+    color: Colors.textSecondary, lineHeight: 17,
+  },
+  fcInfoBold: {
+    fontFamily: 'DM_Sans_600SemiBold', color: '#5856D6',
+  },
+
+  // Honor system explanation box
+  honorBox: {
+    backgroundColor: Colors.bgSurface, borderRadius: 10,
+    padding: 10, marginVertical: 6,
+    borderWidth: 1, borderColor: Colors.divider,
+  },
+  honorRow: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+  },
+  honorText: {
+    flex: 1, fontSize: 12, fontFamily: 'DM_Sans_400Regular',
+    color: Colors.textMuted, lineHeight: 18,
+  },
+  honorBold: {
+    fontFamily: 'DM_Sans_600SemiBold', color: Colors.textSecondary,
   },
 
 });

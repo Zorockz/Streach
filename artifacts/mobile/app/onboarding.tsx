@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import * as Haptics from "expo-haptics";
-import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -1050,7 +1049,7 @@ function PermissionsStep({
     setError("");
     try {
       if (notifOn && Platform.OS !== "web") {
-        await Notifications.requestPermissionsAsync();
+        await requestReminderPermissions();
       }
       const status = await requestFamilyControlsAuth();
       if (status === "authorized") {
