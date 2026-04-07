@@ -5,7 +5,6 @@ import {
   DMSans_700Bold,
   useFonts,
 } from "@expo-google-fonts/dm-sans";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useRef, useState } from "react";
@@ -33,8 +32,6 @@ SplashScreen.preventAutoHideAsync();
 
 // Configure notification appearance once, before any component mounts
 configureNotificationHandler();
-
-const queryClient = new QueryClient();
 
 function RootNavigator() {
   const { settings, isLoading, currentStreak, onForeground } = useApp();
@@ -177,13 +174,11 @@ export default function RootLayout() {
     <Animated.View style={{ flex: 1, opacity: appOpacity }}>
       <SafeAreaProvider>
         <ErrorBoundary>
-          <QueryClientProvider client={queryClient}>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <AppProvider>
-                <RootNavigator />
-              </AppProvider>
-            </GestureHandlerRootView>
-          </QueryClientProvider>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <AppProvider>
+              <RootNavigator />
+            </AppProvider>
+          </GestureHandlerRootView>
         </ErrorBoundary>
       </SafeAreaProvider>
     </Animated.View>

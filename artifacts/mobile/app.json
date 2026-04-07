@@ -2,7 +2,7 @@
   "expo": {
     "name": "Streach Gate",
     "slug": "streach",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "yoga",
@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#B3E8DF"
+      "backgroundColor": "#F4ECE1"
     },
     "ios": {
       "supportsTablet": false,
@@ -21,10 +21,9 @@
         "com.apple.developer.family-controls": true
       },
       "infoPlist": {
-        "NSUserNotificationUsageDescription": "Streach Gate sends reminders to stretch and alerts when your timed unlocks expire."
+        "NSUserNotificationUsageDescription": "Streach Gate uses notifications to remind you to stretch and protect your daily streak."
       }
     },
-    "android": {},
     "web": {
       "favicon": "./assets/images/icon.png"
     },

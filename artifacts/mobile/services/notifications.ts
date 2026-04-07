@@ -226,45 +226,7 @@ export async function cancelStreakProtectionNotification(): Promise<void> {
   } catch { /* non-fatal */ }
 }
 
-// ── Unlock expiry alerts ──────────────────────────────────────────────
-
-export async function scheduleUnlockExpiryAlert(
-  appId: string,
-  appName: string,
-  expiresAt: string,
-  warningMinutes: number = 2
-): Promise<void> {
-  if (Platform.OS === 'web') return;
-  const Notifications = getNotif();
-  if (!Notifications) return;
-  try {
-    const expiryMs = new Date(expiresAt).getTime();
-    const triggerMs = expiryMs - warningMinutes * 60 * 1000;
-    const nowMs = Date.now();
-    if (triggerMs <= nowMs) return;
-    await Notifications.scheduleNotificationAsync({
-      identifier: `${EXPIRY_PREFIX}${appId}`,
-      content: {
-        title: `${appName} gate closing soon`,
-        body: `Your ${warningMinutes}-minute window is almost up. Stretch again to extend it.`,
-        sound: false,
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: new Date(triggerMs),
-      },
-    });
-  } catch { /* non-fatal */ }
-}
-
-export async function cancelUnlockExpiryAlert(appId: string): Promise<void> {
-  if (Platform.OS === 'web') return;
-  const Notifications = getNotif();
-  if (!Notifications) return;
-  try {
-    await Notifications.cancelScheduledNotificationAsync(`${EXPIRY_PREFIX}${appId}`);
-  } catch { /* non-fatal */ }
-}
+// ── Unlock expiry cleanup (cancels any lingering alerts from previous versions) ─
 
 export async function cancelAllUnlockExpiryAlerts(): Promise<void> {
   if (Platform.OS === 'web') return;

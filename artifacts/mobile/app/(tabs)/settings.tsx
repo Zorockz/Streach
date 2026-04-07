@@ -21,7 +21,6 @@ import { Colors } from "@/constants/colors";
 import { STRETCH_CATEGORIES, DISTRACTING_APPS, BodyArea } from "@/constants/stretches";
 import { useApp } from "@/context/AppContext";
 import {
-  getReminderPermissionStatus,
   requestReminderPermissions,
   syncStretchReminderNotifications,
   DEFAULT_REMINDER_HOURS,
