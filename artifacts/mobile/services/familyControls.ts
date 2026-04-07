@@ -1,40 +1,66 @@
-import { Platform } from 'react-native';
+/**
+ * familyControls.ts
+ * JS/TS bridge to the native FamilyControlsModule (modules/family-controls/).
+ *
+ * The native module is registered via Expo Modules Core as "FamilyControlsModule".
+ * It is only available in a development/production build — NOT in Expo Go.
+ *
+ * All public functions are safe to call regardless — they no-op gracefully
+ * when the native module is absent.
+ */
+
+import { Platform, NativeModules } from 'react-native';
 
 export type FamilyControlsStatus = 'authorized' | 'denied' | 'undetermined';
 
-let _nativeModChecked = false;
-let _nativeMod: any = null;
+// ── Native module reference ─────────────────────────────────────────────────
 
-function getNativeMod() {
-  if (_nativeModChecked) return _nativeMod;
-  _nativeModChecked = true;
-  try {
-    _nativeMod = require('react-native').NativeModules.FamilyControlsModule ?? null;
-  } catch {
-    _nativeMod = null;
-  }
-  return _nativeMod;
+let _checked = false;
+let _mod: NativeFamilyControlsModule | null = null;
+
+interface NativeFamilyControlsModule {
+  requestAuthorization(): Promise<string>;
+  getAuthorizationStatus(): string;
+  openFamilyActivityPicker(): Promise<{ selected: boolean }>;
+  hasSavedSelection(): boolean;
+  applyShield(): void;
+  clearShield(): void;
+  enableSchedule(startHour: number, startMinute: number, endHour: number, endMinute: number): Promise<boolean>;
+  disableSchedule(): void;
 }
 
-/** True only when the native FamilyControlsModule bridge is linked (dev build). */
+function getMod(): NativeFamilyControlsModule | null {
+  if (_checked) return _mod;
+  _checked = true;
+  try {
+    _mod = (NativeModules.FamilyControlsModule as NativeFamilyControlsModule) ?? null;
+  } catch {
+    _mod = null;
+  }
+  return _mod;
+}
+
+// ── Public API ──────────────────────────────────────────────────────────────
+
+/**
+ * True only when the native FamilyControlsModule is linked (EAS dev/prod build).
+ * Always false in Expo Go or web.
+ */
 export function isNativeAvailable(): boolean {
-  return Platform.OS === 'ios' && getNativeMod() !== null;
+  return Platform.OS === 'ios' && getMod() !== null;
 }
 
 /**
- * Requests Screen Time / Family Controls authorization.
- * Requires a dev build with the native FamilyControlsModule linked.
- * Returns 'undetermined' when the native module is absent (Expo Go / web).
+ * Requests Apple Screen Time / FamilyControls authorization.
+ * Shows the system permission dialog on first call.
+ * Returns 'authorized' | 'denied' | 'undetermined'.
  */
 export async function requestFamilyControlsAuth(): Promise<FamilyControlsStatus> {
   if (Platform.OS !== 'ios') return 'denied';
-  const mod = getNativeMod();
-  if (!mod?.requestAuthorization) {
-    // Native module not linked — dev build required, cannot prompt the user.
-    return 'undetermined';
-  }
+  const mod = getMod();
+  if (!mod?.requestAuthorization) return 'undetermined';
   try {
-    const result: string = await mod.requestAuthorization();
+    const result = await mod.requestAuthorization();
     if (result === 'authorized') return 'authorized';
     if (result === 'denied') return 'denied';
     return 'undetermined';
@@ -44,43 +70,111 @@ export async function requestFamilyControlsAuth(): Promise<FamilyControlsStatus>
 }
 
 /**
- * Reads the current Screen Time authorization status.
- * Returns 'undetermined' when the native module is absent.
+ * Reads the current Screen Time authorization status synchronously.
  */
-export async function getFamilyControlsStatus(): Promise<FamilyControlsStatus> {
+export function getFamilyControlsStatus(): FamilyControlsStatus {
   if (Platform.OS !== 'ios') return 'denied';
-  const mod = getNativeMod();
+  const mod = getMod();
   if (!mod?.getAuthorizationStatus) return 'undetermined';
   try {
-    const result: string = await mod.getAuthorizationStatus();
+    const result = mod.getAuthorizationStatus();
     if (result === 'authorized') return 'authorized';
     if (result === 'denied') return 'denied';
-  } catch {}
-  return 'undetermined';
+    return 'undetermined';
+  } catch {
+    return 'undetermined';
+  }
 }
 
 /**
- * Applies a ManagedSettings shield to the supplied app bundle identifiers.
- * No-op when native module is absent.
+ * Opens Apple's native FamilyActivityPicker so the user can select
+ * which apps and categories to block. The selection is stored in the
+ * App Group UserDefaults and is accessible by the DeviceActivity Monitor extension.
+ *
+ * Returns true if the user saved a selection, false if they cancelled.
  */
-export async function shieldApps(bundleIds: string[]): Promise<void> {
-  if (Platform.OS !== 'ios') return;
-  const mod = getNativeMod();
-  if (!mod?.shieldApps) return;
+export async function openFamilyActivityPicker(): Promise<boolean> {
+  if (Platform.OS !== 'ios') return false;
+  const mod = getMod();
+  if (!mod?.openFamilyActivityPicker) return false;
   try {
-    await mod.shieldApps(bundleIds);
-  } catch {}
+    const result = await mod.openFamilyActivityPicker();
+    return result.selected;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Removes any active ManagedSettings shield.
- * No-op when native module is absent.
+ * Returns true if the user has previously saved a FamilyActivitySelection.
  */
-export async function clearShield(): Promise<void> {
+export function hasSavedAppSelection(): boolean {
+  if (Platform.OS !== 'ios') return false;
+  const mod = getMod();
+  if (!mod?.hasSavedSelection) return false;
+  try {
+    return mod.hasSavedSelection();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Applies the saved FamilyActivitySelection as a ManagedSettings shield immediately.
+ * Use this for manual locking outside the scheduled window.
+ */
+export function applyShieldNow(): void {
   if (Platform.OS !== 'ios') return;
-  const mod = getNativeMod();
+  const mod = getMod();
+  if (!mod?.applyShield) return;
+  try { mod.applyShield(); } catch {}
+}
+
+/**
+ * Removes all active ManagedSettings shields immediately.
+ */
+export function clearShieldNow(): void {
+  if (Platform.OS !== 'ios') return;
+  const mod = getMod();
   if (!mod?.clearShield) return;
+  try { mod.clearShield(); } catch {}
+}
+
+/**
+ * Starts a repeating DeviceActivity schedule.
+ * The DeviceActivity Monitor extension automatically shields/unshields
+ * the selected apps at the start/end of the window — even when the app is closed.
+ *
+ * @param startHour   24h lock start hour  (e.g. 22 for 10 PM)
+ * @param startMinute Lock start minute
+ * @param endHour     24h lock end hour    (e.g. 8 for 8 AM)
+ * @param endMinute   Lock end minute
+ */
+export async function enableLockSchedule(
+  startHour: number,
+  startMinute: number,
+  endHour: number,
+  endMinute: number,
+): Promise<boolean> {
+  if (Platform.OS !== 'ios') return false;
+  const mod = getMod();
+  if (!mod?.enableSchedule) return false;
   try {
-    await mod.clearShield();
+    return await mod.enableSchedule(startHour, startMinute, endHour, endMinute);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Stops the DeviceActivity schedule and removes all shields.
+ */
+export function disableLockSchedule(): void {
+  if (Platform.OS !== 'ios') return;
+  const mod = getMod();
+  if (!mod?.disableSchedule) return;
+  try {
+    mod.disableSchedule();
+    mod.clearShield?.();
   } catch {}
 }

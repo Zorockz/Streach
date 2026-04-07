@@ -29,6 +29,8 @@ import type { ReminderTime, ReminderHourConfig } from "@/services/notifications"
 import {
   requestFamilyControlsAuth,
   getFamilyControlsStatus,
+  openFamilyActivityPicker,
+  hasSavedAppSelection,
   isNativeAvailable,
 } from "@/services/familyControls";
 import type { FamilyControlsStatus } from "@/services/familyControls";
@@ -347,11 +349,10 @@ export default function SettingsScreen() {
   );
   const [fcLoading, setFcLoading] = useState(false);
   useEffect(() => {
-    getFamilyControlsStatus().then(s => {
-      setFcStatus(s);
-      if (s === "authorized" && !settings.familyControlsAuthorized)
-        updateSettings({ familyControlsAuthorized: true });
-    });
+    const s = getFamilyControlsStatus();
+    setFcStatus(s);
+    if (s === "authorized" && !settings.familyControlsAuthorized)
+      updateSettings({ familyControlsAuthorized: true });
   }, []);
 
   const handleRequestFC = async () => {
@@ -455,9 +456,27 @@ export default function SettingsScreen() {
     );
   };
 
+  // Native FamilyActivityPicker handler
+  const handleOpenApps = async () => {
+    if (Platform.OS !== "web") await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (isNativeAvailable()) {
+      // Use Apple's native FamilyActivityPicker — saves selection internally to App Group
+      await openFamilyActivityPicker();
+      // Reflect that a selection exists (actual selection is opaque, stored natively)
+      await updateSettings({ lockedApps: hasSavedAppSelection() ? ["__native_selection__"] : [] });
+    } else {
+      // Dev build not available — use JS fallback picker
+      setShowApps(true);
+    }
+  };
+
   // Derived values for display
-  const appsLabel = settings.lockedApps.length === 0
-    ? "None selected" : `${settings.lockedApps.length} app${settings.lockedApps.length > 1 ? "s" : ""}`;
+  const nativeSelectionActive = isNativeAvailable() && hasSavedAppSelection();
+  const appsLabel = nativeSelectionActive
+    ? "Selected (native)"
+    : settings.lockedApps.length === 0
+    ? "None selected"
+    : `${settings.lockedApps.length} app${settings.lockedApps.length > 1 ? "s" : ""}`;
   const focusLabel = settings.focusBodyAreas.length === 0
     ? "All areas" : settings.focusBodyAreas.length === 1
     ? settings.focusBodyAreas[0] : `${settings.focusBodyAreas.length} areas`;
@@ -503,9 +522,9 @@ export default function SettingsScreen() {
           <NavRow
             icon="lock-closed-outline"
             iconBg="rgba(58,122,92,0.1)"
-            label="Apps"
+            label={isNativeAvailable() ? "Choose with Screen Time" : "Apps"}
             value={appsLabel}
-            onPress={() => setShowApps(true)}
+            onPress={handleOpenApps}
             divider={false}
           />
         </Section>

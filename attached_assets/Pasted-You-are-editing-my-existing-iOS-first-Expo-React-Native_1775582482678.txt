@@ -1,0 +1,297 @@
+You are editing my existing iOS-first Expo / React Native repo.
+
+Main problem:
+Replit is NOT actually using the Apple Family Controls entitlement in the app.
+The entitlement may be approved on Apple’s side, but the app is not calling the Family Controls API properly, so Screen Time permission is never requested.
+
+Your job is to fix that correctly using native iOS implementation.
+
+IMPORTANT:
+- Do NOT use Expo Go
+- Do NOT use fake JS-only Screen Time logic
+- Do NOT keep honor-system fallback as the main behavior
+- Do NOT keep temporary unlock window logic
+- I only want scheduled locking at certain times
+- Keep changes minimal and focused
+- Do not redesign unrelated parts of the app
+
+==================================================
+WHAT I NEED
+==================================================
+
+I need the app to:
+1. Actually use Apple Family Controls entitlement in the app target
+2. Request Screen Time authorization correctly on iPhone
+3. Use FamilyActivityPicker to choose apps/categories
+4. Use ManagedSettings to shield selected apps/categories
+5. Use DeviceActivity for scheduled lock periods
+6. Remove unlock-window logic completely
+7. Keep settings page minimal and focused
+
+==================================================
+READ THIS REQUIREMENT CAREFULLY
+==================================================
+
+Do not assume entitlement approval alone is enough.
+
+You must verify and fix ALL of these:
+- native FamilyControls authorization call exists
+- app target has Family Controls capability configured
+- Screen Time API extensions exist if required
+- entitlement is applied to the correct targets
+- provisioning/signing assumptions are documented if they cannot be fully fixed in repo
+- app is built for a development build / native iOS build, not Expo Go
+- JS layer is actually calling the native authorization method
+
+==================================================
+USE THESE iOS FRAMEWORKS ONLY
+==================================================
+
+For Screen Time:
+- FamilyControls
+- ManagedSettings
+- DeviceActivity
+
+Do not use any fake/custom blocker solution.
+Do not use unlock window logic.
+Do not use temporary bypass logic.
+
+==================================================
+APP BEHAVIOR I WANT
+==================================================
+
+The app should work like this:
+- A person opens settings/setup
+- They grant Screen Time access
+- They choose apps/categories to lock using Apple’s native picker
+- They choose when those apps should be locked
+- During those scheduled times, those apps are blocked by Screen Time
+- No temporary unlock windows
+- No “unlock for 5/10/15/30 minutes” feature
+
+==================================================
+ISSUES TO FIX
+==================================================
+
+1. Screen Time permission is never requested
+Fix why this is not happening.
+
+2. Family Controls entitlement is not actually being used in app code
+Fix the native integration and bridge.
+
+3. Unlock window feature exists but I do not want it
+Remove it completely.
+
+4. Settings page has too much extra stuff
+Simplify it so it mainly covers:
+- Screen Time access
+- Apps to lock
+- Lock schedule
+- Support
+- Privacy policy
+- Version (optional)
+
+5. Support email must be:
+simodigitalagency@gmail.com
+
+6. Privacy policy URL must be:
+https://www.termsfeed.com/live/ee6484bf-6c19-4aca-baed-79f084570331
+
+7. Old Pray Screen wording and weird malformed strings must be removed
+
+==================================================
+WHAT TO INSPECT FIRST
+==================================================
+
+Inspect at minimum:
+- artifacts/mobile/context/AppContext.tsx
+- artifacts/mobile/app/_layout.tsx
+- artifacts/mobile/app/onboarding.tsx
+- artifacts/mobile/app/(tabs)/settings.tsx
+- artifacts/mobile/app/(tabs)/index.tsx
+- artifacts/mobile/app/stretch/session.tsx
+- artifacts/mobile/app.json
+- app.config.js / app.config.ts if present
+- package.json files
+- ios folder if present
+- any entitlements files
+- any native modules
+- any existing Screen Time related code
+- any unlock window logic
+- any constants/config files for support/legal links
+
+==================================================
+WHAT TO IMPLEMENT
+==================================================
+
+A) NATIVE FAMILY CONTROLS BRIDGE
+
+Add or fix a native iOS bridge/module that exposes at least:
+- requestScreenTimeAuthorization()
+- getScreenTimeAuthorizationStatus()
+- openFamilyActivityPicker()
+- saveFamilyActivitySelection(...)
+- getSavedFamilyActivitySelection()
+- enableScheduledShielding(...)
+- disableScheduledShielding()
+- getCurrentShieldState()
+
+If better method names fit the repo, that is okay, but the functionality must exist.
+
+B) SCREEN TIME AUTHORIZATION
+
+Make sure the app actually calls the native Screen Time authorization flow from the settings/setup screen.
+If authorization is not determined, the UI should show a button to request it.
+If authorized, show connected state.
+If denied/unavailable, show that clearly.
+
+C) FAMILY ACTIVITY PICKER
+
+Use Apple’s native FamilyActivityPicker for choosing apps/categories.
+Do not keep a fake JS app picker as the real source of truth.
+
+D) MANAGED SETTINGS SHIELDING
+
+Use ManagedSettingsStore to shield the selected apps/categories.
+Scheduled shielding should follow the chosen schedule.
+
+E) DEVICE ACTIVITY SCHEDULE
+
+Use DeviceActivity for scheduled lock periods.
+Implement schedule-based locking only.
+If the app already has schedule UI, wire it properly.
+If not, add the smallest useful schedule UI:
+- start time
+- end time
+- optionally selected days if needed cleanly
+
+F) REMOVE UNLOCK WINDOW LOGIC
+
+Completely remove:
+- unlockWindowMinutes
+- temporary unlock state
+- countdowns for unlock windows
+- temporary unlock settings rows
+- unlock-window copy
+- helper functions tied to temporary unlocks
+- session logic that grants temporary unlocks
+
+Keep the stretch content if already used elsewhere, but do not use it as temporary unlock logic anymore.
+
+G) SETTINGS PAGE SIMPLIFICATION
+
+Simplify the settings page.
+Keep only:
+1. Screen Time Access
+2. Apps to Lock
+3. Lock Schedule
+4. Support
+5. Privacy Policy
+6. Version if already useful
+
+Remove:
+- old Pray Screen branding
+- extra user status rows
+- user ID row
+- unnecessary share/contact clutter if duplicated
+- unlock-window settings
+- anything not needed for Screen Time setup or legal/support
+
+H) SUPPORT + PRIVACY
+
+Replace support email everywhere with:
+simodigitalagency@gmail.com
+
+Replace privacy policy URL everywhere with:
+https://www.termsfeed.com/live/ee6484bf-6c19-4aca-baed-79f084570331
+
+Centralize these values if helpful so they are not duplicated.
+
+I) COPY CLEANUP
+
+Remove all old “Pray Screen” wording.
+Fix malformed strings like:
+- begin \u00b7
+- strange separators
+- bad escaped punctuation
+
+Keep copy simple and clean.
+
+==================================================
+NATIVE BUILD / ENTITLEMENT REQUIREMENTS
+==================================================
+
+If the repo is still depending on Expo Go, fix it for dev build / native iOS usage.
+If iOS native project files are missing, generate or scaffold what is necessary.
+If Screen Time API extensions are missing, add the required extension targets/config scaffolding if possible in repo.
+If there are Apple/Xcode steps that cannot be completed purely in repo, document them exactly.
+
+You must clearly identify:
+- what is fixed in code
+- what still requires Xcode / Apple Developer portal / signing / provisioning
+- which targets need Family Controls capability
+- whether App Groups or Screen Time extensions are required in this repo structure
+
+==================================================
+IMPORTANT RULES
+==================================================
+
+- Keep changes surgical
+- No broad rewrite
+- No redesign of unrelated screens
+- No fake fallback logic
+- No unlock-window feature
+- No unnecessary dependencies
+- Keep TypeScript typed and clean
+- Use native iOS APIs where required
+
+==================================================
+RESPONSE FORMAT
+==================================================
+
+Respond in this exact order:
+
+1. Repo inspection summary
+- why Screen Time permission is not being requested
+- whether a native FamilyControls bridge exists
+- whether entitlement-related native targets/files exist
+- where unlock-window logic currently lives
+- where wrong support/legal links live
+- where old Pray Screen wording lives
+
+2. Exact implementation plan
+- smallest set of files to change
+- native files/modules to add or fix
+- JS files to update
+- what will be removed
+
+3. Code changes
+- implement the changes directly
+
+4. Changed files list
+- every changed file
+- one-line reason for each
+
+5. Manual QA checklist
+Must include:
+- build app as iOS development build
+- Screen Time request appears on iPhone
+- authorization status updates correctly
+- FamilyActivityPicker opens correctly
+- selected apps/categories save correctly
+- schedule applies correctly
+- selected apps are shielded during scheduled times
+- unlock-window feature is gone everywhere
+- support email is correct
+- privacy policy URL is correct
+- old Pray Screen wording is gone
+- malformed strings are gone
+
+6. Native/Xcode follow-up steps
+- exactly what still must be done in Xcode / Apple Developer / signing / provisioning
+- exactly which targets need the Family Controls capability
+- exactly what cannot work until those steps are done
+
+7. Limitations
+- clearly state any real iOS API limitations
+- do not hide them

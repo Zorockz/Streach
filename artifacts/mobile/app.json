@@ -18,7 +18,8 @@
       "bundleIdentifier": "com.zorockz.Yoga",
       "buildNumber": "1",
       "entitlements": {
-        "com.apple.developer.family-controls": true
+        "com.apple.developer.family-controls": true,
+        "com.apple.security.application-groups": ["group.com.zorockz.Yoga"]
       },
       "infoPlist": {
         "NSUserNotificationUsageDescription": "Streach Gate uses notifications to remind you to stretch and protect your daily streak.",
@@ -37,7 +38,8 @@
         {
           "iosDisplayInForeground": true
         }
-      ]
+      ],
+      "./plugins/withFamilyControls"
     ],
     "experiments": {
       "typedRoutes": true,

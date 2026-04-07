@@ -1,0 +1,12 @@
+{
+  "name": "family-controls",
+  "version": "1.0.0",
+  "description": "Native iOS Family Controls / Screen Time bridge for Streach Gate",
+  "main": "src/index",
+  "typings": "src/index",
+  "scripts": {},
+  "peerDependencies": {
+    "expo": "*",
+    "react-native": "*"
+  }
+}
