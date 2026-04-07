@@ -200,7 +200,11 @@ export default function StretchSessionScreen() {
     targetApp?: string;
     targetAppId?: string;
   }>();
-  const { recordSession, unlockAppForWindow } = useApp();
+  const { settings, recordSession, unlockAppForWindow } = useApp();
+
+  const unlockUntilLabel = settings.reminderEnabled && settings.selectedReminderTimes.length > 0
+    ? "until your next reminder"
+    : "for the rest of the day";
 
   const stretch = stretchId
     ? STRETCHES.find(s => s.id === stretchId)
@@ -457,7 +461,7 @@ export default function StretchSessionScreen() {
                   color={Colors.accent}
                 />
                 <Text style={styles.unlockText}>
-                  {targetApp} is now unlocked
+                  {targetApp} unlocked {unlockUntilLabel}
                 </Text>
               </View>
             )}

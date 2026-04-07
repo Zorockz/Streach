@@ -5,7 +5,7 @@ import {
   ReminderTime,
   ReminderHourConfig,
   cancelAllUnlockExpiryAlerts,
-  scheduleUnlockExpiryAlert,
+  DEFAULT_REMINDER_HOURS,
 } from '@/services/notifications';
 
 export type ScrollTime = 'morning' | 'midday' | 'evening' | 'night';
@@ -36,7 +36,6 @@ export interface AppSettings {
   dailyGoal: number;
   hapticEnabled: boolean;
   reminderEnabled: boolean;
-  unlockWindowMinutes: number;
   // Scroll / reminder time prefs
   selectedScrollTimes: ScrollTime[];
   selectedReminderTimes: ReminderTime[];
@@ -46,9 +45,6 @@ export interface AppSettings {
   // Streak protection notif
   streakNotifEnabled: boolean;
   streakNotifHour: number;     // hour (24h) to fire the streak reminder (default 21)
-  // Unlock expiry alerts
-  unlockExpiryNotifEnabled: boolean;
-  unlockExpiryWarningMinutes: number; // how many minutes before expiry to warn (1/2/5)
   // Gate system master toggle
   gatesActive: boolean;
   // Family Controls
@@ -88,20 +84,45 @@ const DEFAULT_SETTINGS: AppSettings = {
   dailyGoal: 3,
   hapticEnabled: true,
   reminderEnabled: false,
-  unlockWindowMinutes: 15,
   selectedScrollTimes: [],
   selectedReminderTimes: [],
   reminderHours: {},
   notificationPermissionStatus: 'undetermined',
   streakNotifEnabled: true,
   streakNotifHour: 21,
-  unlockExpiryNotifEnabled: true,
-  unlockExpiryWarningMinutes: 2,
   gatesActive: true,
   familyControlsAuthorized: false,
   honorSystemMode: true,
   sessionMinSeconds: 10,
 };
+
+/**
+ * Returns the next time an app should re-lock based on the user's scheduled
+ * reminder times. If no reminders are configured, returns midnight tonight.
+ */
+function getNextReminderExpiry(
+  selectedReminderTimes: ReminderTime[],
+  reminderHours: Partial<Record<ReminderTime, ReminderHourConfig>>
+): Date {
+  const now = new Date();
+  const nowMs = now.getTime();
+
+  const futureMs: number[] = selectedReminderTimes.map(rt => {
+    const cfg = reminderHours[rt] ?? DEFAULT_REMINDER_HOURS[rt];
+    const t = new Date(now);
+    t.setHours(cfg.hour, cfg.minute, 0, 0);
+    return t.getTime();
+  }).filter(t => t > nowMs).sort((a, b) => a - b);
+
+  if (futureMs.length > 0) {
+    return new Date(futureMs[0]);
+  }
+
+  // No more reminders today — stay unlocked until midnight
+  const midnight = new Date(now);
+  midnight.setHours(23, 59, 59, 0);
+  return midnight;
+}
 
 const STORAGE_KEYS = {
   SETTINGS: '@stretchgate/settings',
@@ -253,8 +274,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const unlockAppForWindow = useCallback(
     async (appId: string, appName: string, stretchId: string, sourceSessionId?: string) => {
       const now = new Date();
-      const expiresAt = new Date(
-        now.getTime() + settings.unlockWindowMinutes * 60 * 1000
+      // Expires at the next scheduled reminder, or midnight if none remain today
+      const expiresAt = getNextReminderExpiry(
+        settings.reminderEnabled ? settings.selectedReminderTimes : [],
+        settings.reminderHours ?? {}
       );
       const record: UnlockRecord = {
         appId,
@@ -269,21 +292,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         AsyncStorage.setItem(STORAGE_KEYS.UNLOCKS, JSON.stringify(updated));
         return updated;
       });
-
-      // Schedule expiry alert if enabled and permission granted
-      if (
-        settings.unlockExpiryNotifEnabled &&
-        settings.notificationPermissionStatus === 'granted'
-      ) {
-        await scheduleUnlockExpiryAlert(
-          appId,
-          appName,
-          expiresAt.toISOString(),
-          settings.unlockExpiryWarningMinutes
-        );
-      }
     },
-    [settings.unlockWindowMinutes, settings.unlockExpiryNotifEnabled, settings.notificationPermissionStatus, settings.unlockExpiryWarningMinutes]
+    [settings.reminderEnabled, settings.selectedReminderTimes, settings.reminderHours]
   );
 
   const cleanupExpiredUnlocks = useCallback(async () => {

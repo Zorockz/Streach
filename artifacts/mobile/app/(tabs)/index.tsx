@@ -58,11 +58,14 @@ function StartButton({ onPress }: { onPress: () => void }) {
 }
 
 function formatRemainingTime(ms: number): string {
-  const totalSecs = Math.ceil(ms / 1000);
-  const mins = Math.floor(totalSecs / 60);
-  const secs = totalSecs % 60;
-  if (mins > 0) return `${mins}m left`;
-  return `${secs}s left`;
+  const totalMins = Math.ceil(ms / 60000);
+  if (totalMins >= 60) {
+    const hrs = Math.floor(totalMins / 60);
+    const mins = totalMins % 60;
+    return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
+  }
+  if (totalMins > 0) return `${totalMins}m`;
+  return `<1m`;
 }
 
 export default function HomeScreen() {

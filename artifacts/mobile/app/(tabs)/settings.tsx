@@ -63,12 +63,6 @@ const REMINDER_OPTS: { id: ReminderTime; label: string; icon: string }[] = [
   { id: "midday",  label: "Midday",  icon: "partly-sunny-outline" },
   { id: "evening", label: "Evening", icon: "moon-outline" },
 ];
-const UNLOCK_WINDOW_OPTS = [5, 10, 15, 30];
-const STREAK_NOTIF_HOUR_OPTS: { value: number; label: string }[] = [
-  { value: 18, label: "6 PM" }, { value: 19, label: "7 PM" },
-  { value: 20, label: "8 PM" }, { value: 21, label: "9 PM" },
-  { value: 22, label: "10 PM" },
-];
 
 // ── Row building blocks ───────────────────────────────────────────────
 
@@ -387,7 +381,6 @@ export default function SettingsScreen() {
   const [showApps, setShowApps] = useState(false);
   const [showFocus, setShowFocus] = useState(false);
   const [showDuration, setShowDuration] = useState(false);
-  const [showWindow, setShowWindow] = useState(false);
   const [showGoal, setShowGoal] = useState(false);
 
   // Notification sync
@@ -479,7 +472,6 @@ export default function SettingsScreen() {
     ? "All areas" : settings.focusBodyAreas.length === 1
     ? settings.focusBodyAreas[0] : `${settings.focusBodyAreas.length} areas`;
   const durationLabel = `${settings.preferredDuration}s`;
-  const windowLabel = `${settings.unlockWindowMinutes} min`;
   const fcLabel = fcStatus === "authorized" ? "Active"
     : fcStatus === "denied" ? "Denied"
     : Platform.OS === "ios" && !NativeModules.FamilyControlsModule ? "Dev build required"
@@ -582,14 +574,6 @@ export default function SettingsScreen() {
             label="Daily goal"
             value={`${settings.dailyGoal} stretch${settings.dailyGoal > 1 ? "es" : ""}`}
             onPress={() => setShowGoal(true)}
-            divider
-          />
-          <NavRow
-            icon="hourglass-outline"
-            iconBg="rgba(58,122,92,0.1)"
-            label="Unlock window"
-            value={windowLabel}
-            onPress={() => setShowWindow(true)}
             divider={false}
           />
         </Section>
@@ -604,16 +588,6 @@ export default function SettingsScreen() {
             sub="Alert if you haven't stretched by evening"
             value={settings.streakNotifEnabled}
             onChange={async v => { await updateSettings({ streakNotifEnabled: v }); await syncNotifs({ streakNotifEnabled: v }); }}
-            divider
-          />
-          <ToggleRow
-            icon="alarm-outline"
-            iconBg="rgba(201,106,50,0.1)"
-            iconColor={Colors.accent}
-            label="Expiry alert"
-            sub="Notify before your unlock window closes"
-            value={settings.unlockExpiryNotifEnabled}
-            onChange={v => updateSettings({ unlockExpiryNotifEnabled: v })}
             divider={false}
           />
         </Section>
@@ -658,15 +632,15 @@ export default function SettingsScreen() {
             icon="document-text-outline"
             iconBg={Colors.primaryMuted}
             label="Privacy Policy"
-            onPress={() => Linking.openURL("https://stretchgate.app/privacy")}
+            onPress={() => Linking.openURL("https://www.termsfeed.com/live/ee6484bf-6c19-4aca-baed-79f084570331")}
             divider
           />
           <NavRow
             icon="mail-outline"
             iconBg={Colors.primaryMuted}
             label="Contact Support"
-            value="hello@stretchgate.app"
-            onPress={() => Linking.openURL("mailto:hello@stretchgate.app")}
+            value="simodigitalagency@gmail.com"
+            onPress={() => Linking.openURL("mailto:simodigitalagency@gmail.com")}
             divider={false}
           />
         </Section>
@@ -723,14 +697,6 @@ export default function SettingsScreen() {
         selected={settings.preferredDuration}
         onSelect={v => updateSettings({ preferredDuration: v })}
         onClose={() => setShowDuration(false)}
-      />
-      <ListPickerModal
-        visible={showWindow}
-        title="Unlock Window"
-        options={UNLOCK_WINDOW_OPTS.map(v => ({ value: v, label: `${v} minutes` }))}
-        selected={settings.unlockWindowMinutes}
-        onSelect={v => updateSettings({ unlockWindowMinutes: v })}
-        onClose={() => setShowWindow(false)}
       />
       <ListPickerModal
         visible={showGoal}
