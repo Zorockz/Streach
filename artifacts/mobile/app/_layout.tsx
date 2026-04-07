@@ -37,23 +37,26 @@ function RootNavigator() {
   const { settings, isLoading, currentStreak, onForeground } = useApp();
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
-  // Gates the home screen until Superwall resolves
+  // Gates the home screen until Superwall resolves.
+  // Starts false — the overlay is only rendered once the user IS onboarded
+  // (see JSX below), so it never appears during the onboarding flow itself.
   const [paywallChecked, setPaywallChecked] = useState(false);
   const paywallTriggeredRef = useRef(false);
 
-  // ── Redirect to onboarding if needed ──────────────────────────────
-  useEffect(() => {
-    if (!isLoading && !settings.hasCompletedOnboarding) {
-      router.replace("/onboarding");
-      // No paywall during onboarding
-      setPaywallChecked(true);
-    }
-  }, [isLoading]);
-
-  // ── Trigger Superwall paywall when user is onboarded ───────────────
+  // ── Onboarding redirect + Superwall gate (single effect) ───────────
   useEffect(() => {
     if (isLoading) return;
-    if (!settings.hasCompletedOnboarding) return;
+
+    if (!settings.hasCompletedOnboarding) {
+      // Send to onboarding — no paywall overlay during this flow
+      router.replace("/onboarding");
+      return;
+    }
+
+    // User is onboarded — trigger Superwall exactly once.
+    // Superwall calls feature() if the user is already subscribed,
+    // or presents the paywall and calls onSkip/onDismiss otherwise.
+    // Either way, onReady() is called → paywallChecked becomes true.
     if (paywallTriggeredRef.current) return;
     paywallTriggeredRef.current = true;
 
@@ -134,8 +137,10 @@ function RootNavigator() {
         />
       </Stack>
 
-      {/* Paywall gate overlay — Superwall presents its UI on top of this */}
-      {!paywallChecked && (
+      {/* Paywall gate overlay — only rendered post-onboarding while Superwall
+          is resolving. Superwall presents its paywall UI on top of this view.
+          The loading indicator is shown beneath the paywall while it loads. */}
+      {settings.hasCompletedOnboarding && !paywallChecked && (
         <View style={styles.paywallGate} pointerEvents="auto">
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
