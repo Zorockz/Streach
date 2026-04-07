@@ -16,7 +16,6 @@ import {
   Text,
   View,
 } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { STRETCH_CATEGORIES, DISTRACTING_APPS, BodyArea } from "@/constants/stretches";
@@ -34,313 +33,364 @@ import {
 } from "@/services/familyControls";
 import type { FamilyControlsStatus } from "@/services/familyControls";
 
-// ── Time picker helpers ───────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────
 
-interface TimeOption {
-  hour: number;
-  minute: number;
-  label: string;
-}
+interface TimeOption { hour: number; minute: number; label: string; }
 
 function buildTimeOptions(): TimeOption[] {
   const opts: TimeOption[] = [];
   for (let h = 5; h <= 23; h++) {
     for (const m of [0, 30]) {
-      const ampm = h < 12 ? 'AM' : 'PM';
-      const hDisplay = h % 12 || 12;
-      const mDisplay = m === 0 ? '00' : '30';
-      opts.push({ hour: h, minute: m, label: `${hDisplay}:${mDisplay} ${ampm}` });
+      const ampm = h < 12 ? "AM" : "PM";
+      const hD = h % 12 || 12;
+      const mD = m === 0 ? "00" : "30";
+      opts.push({ hour: h, minute: m, label: `${hD}:${mD} ${ampm}` });
     }
   }
   return opts;
 }
-
 const TIME_OPTIONS = buildTimeOptions();
 
 function formatHourConfig(cfg: ReminderHourConfig): string {
-  const ampm = cfg.hour < 12 ? 'AM' : 'PM';
+  const ampm = cfg.hour < 12 ? "AM" : "PM";
   const h = cfg.hour % 12 || 12;
-  const m = cfg.minute === 0 ? '00' : '30';
+  const m = cfg.minute === 0 ? "00" : "30";
   return `${h}:${m} ${ampm}`;
 }
 
-// ── Sub-components ────────────────────────────────────────────────────
+const REMINDER_OPTS: { id: ReminderTime; label: string; icon: string }[] = [
+  { id: "morning", label: "Morning", icon: "cafe-outline" },
+  { id: "midday",  label: "Midday",  icon: "partly-sunny-outline" },
+  { id: "evening", label: "Evening", icon: "moon-outline" },
+];
+const UNLOCK_WINDOW_OPTS = [5, 10, 15, 30];
+const STREAK_NOTIF_HOUR_OPTS: { value: number; label: string }[] = [
+  { value: 18, label: "6 PM" }, { value: 19, label: "7 PM" },
+  { value: 20, label: "8 PM" }, { value: 21, label: "9 PM" },
+  { value: 22, label: "10 PM" },
+];
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+// ── Row building blocks ───────────────────────────────────────────────
+
+function NavRow({
+  icon, iconBg, iconColor = Colors.primary,
+  label, labelColor, value, right,
+  onPress, divider = true,
+}: {
+  icon: string; iconBg?: string; iconColor?: string;
+  label: string; labelColor?: string;
+  value?: string; right?: React.ReactNode;
+  onPress?: () => void; divider?: boolean;
+}) {
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.sectionCard}>{children}</View>
+    <Pressable
+      style={[s.row, !divider && { borderBottomWidth: 0 }]}
+      onPress={onPress}
+      disabled={!onPress}
+    >
+      <View style={[s.rowIcon, { backgroundColor: iconBg ?? Colors.primaryMuted }]}>
+        <Ionicons name={icon as any} size={20} color={iconColor} />
+      </View>
+      <Text style={[s.rowLabel, labelColor ? { color: labelColor } : undefined]}>{label}</Text>
+      {value && <Text style={s.rowValue}>{value}</Text>}
+      {right}
+      {onPress && !right && <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />}
+    </Pressable>
+  );
+}
+
+function ToggleRow({
+  icon, iconBg, iconColor = Colors.primary, label, sub, value, onChange, divider = true,
+}: {
+  icon: string; iconBg?: string; iconColor?: string;
+  label: string; sub?: string;
+  value: boolean; onChange: (v: boolean) => void; divider?: boolean;
+}) {
+  return (
+    <View style={[s.row, !divider && { borderBottomWidth: 0 }]}>
+      <View style={[s.rowIcon, { backgroundColor: iconBg ?? Colors.primaryMuted }]}>
+        <Ionicons name={icon as any} size={20} color={iconColor} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={s.rowLabel}>{label}</Text>
+        {sub ? <Text style={s.rowSub}>{sub}</Text> : null}
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onChange}
+        trackColor={{ false: Colors.bgSurface, true: Colors.primary }}
+        thumbColor={Colors.white}
+        ios_backgroundColor={Colors.bgSurface}
+      />
     </View>
   );
 }
 
-function Row({
-  icon, iconBg, iconColor, label, sub, value, right, onPress, divider = true, danger,
-}: {
-  icon: string; iconBg?: string; iconColor?: string; label: string; sub?: string;
-  value?: string; right?: React.ReactNode; onPress?: () => void; divider?: boolean; danger?: boolean;
-}) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Pressable
-      style={[styles.row, !divider && { borderBottomWidth: 0 }]}
-      onPress={onPress}
-      disabled={!onPress && !right}
-    >
-      <View style={[styles.rowIcon, { backgroundColor: iconBg ?? Colors.primaryMuted }]}>
-        <Ionicons name={icon as any} size={16} color={iconColor ?? Colors.primary} />
-      </View>
-      <View style={styles.rowInfo}>
-        <Text style={[styles.rowLabel, danger && { color: Colors.error }]}>{label}</Text>
-        {sub ? <Text style={styles.rowSub}>{sub}</Text> : null}
-      </View>
-      {value && <Text style={styles.rowValue}>{value}</Text>}
-      {right}
-      {onPress && !right && (
-        <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-      )}
-    </Pressable>
+    <View style={s.section}>
+      {title ? <Text style={s.sectionTitle}>{title}</Text> : null}
+      <View style={s.card}>{children}</View>
+    </View>
   );
 }
 
-function AppRow({ app, checked, onToggle, divider }: {
-  app: typeof DISTRACTING_APPS[0]; checked: boolean; onToggle: () => void; divider: boolean;
-}) {
-  return (
-    <Pressable
-      style={[styles.row, !divider && { borderBottomWidth: 0 }]}
-      onPress={onToggle}
-    >
-      <View style={[styles.rowIcon, { backgroundColor: app.color + "18" }]}>
-        <Ionicons
-          name={app.icon as any} size={16}
-          color={app.color === "#010101" || app.color === "#FFCA00" ? Colors.text : app.color}
-        />
-      </View>
-      <Text style={[styles.rowLabel, { flex: 1 }]}>{app.name}</Text>
-      <View style={[styles.checkbox, checked && styles.checkboxOn]}>
-        {checked && <Ionicons name="checkmark" size={12} color={Colors.white} />}
-      </View>
-    </Pressable>
-  );
-}
-
-// ── Time Picker Modal ─────────────────────────────────────────────────
+// ── Time picker modal ─────────────────────────────────────────────────
 
 function TimePickerModal({
-  visible,
-  reminderTime,
-  current,
-  onSelect,
-  onClose,
+  visible, reminderTime, current, onSelect, onClose,
 }: {
-  visible: boolean;
-  reminderTime: ReminderTime;
-  current: ReminderHourConfig;
-  onSelect: (cfg: ReminderHourConfig) => void;
-  onClose: () => void;
+  visible: boolean; reminderTime: ReminderTime;
+  current: ReminderHourConfig; onSelect: (cfg: ReminderHourConfig) => void; onClose: () => void;
 }) {
-  const LABEL: Record<ReminderTime, string> = {
-    morning: 'Morning',
-    midday: 'Midday',
-    evening: 'Evening',
-  };
-
+  const LABEL: Record<ReminderTime, string> = { morning: "Morning", midday: "Midday", evening: "Evening" };
   const flatRef = useRef<FlatList>(null);
-
   useEffect(() => {
     if (!visible) return;
-    const idx = TIME_OPTIONS.findIndex(
-      t => t.hour === current.hour && t.minute === current.minute
-    );
+    const idx = TIME_OPTIONS.findIndex(t => t.hour === current.hour && t.minute === current.minute);
     if (idx >= 0 && flatRef.current) {
-      setTimeout(() => {
-        flatRef.current?.scrollToIndex({ index: idx, animated: false, viewPosition: 0.4 });
-      }, 100);
+      setTimeout(() => flatRef.current?.scrollToIndex({ index: idx, animated: false, viewPosition: 0.4 }), 100);
     }
   }, [visible, current]);
-
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <Pressable style={pick.overlay} onPress={onClose} />
-      <View style={pick.sheet}>
-        <View style={pick.handle} />
-        <Text style={pick.title}>{LABEL[reminderTime]} reminder</Text>
-        <Text style={pick.sub}>Choose when you'd like to be nudged</Text>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={m.overlay} onPress={onClose} />
+      <View style={m.sheet}>
+        <View style={m.handle} />
+        <Text style={m.title}>{LABEL[reminderTime]} reminder</Text>
         <FlatList
           ref={flatRef}
           data={TIME_OPTIONS}
           keyExtractor={item => `${item.hour}:${item.minute}`}
-          style={pick.list}
+          style={{ maxHeight: 300 }}
           showsVerticalScrollIndicator={false}
           onScrollToIndexFailed={() => {}}
           renderItem={({ item }) => {
             const selected = item.hour === current.hour && item.minute === current.minute;
             return (
               <Pressable
-                style={[pick.option, selected && pick.optionSelected]}
-                onPress={() => {
-                  onSelect({ hour: item.hour, minute: item.minute });
-                  onClose();
-                }}
+                style={[m.option, selected && m.optSel]}
+                onPress={() => { onSelect({ hour: item.hour, minute: item.minute }); onClose(); }}
               >
-                <Text style={[pick.optionText, selected && pick.optionTextSelected]}>
-                  {item.label}
-                </Text>
-                {selected && (
-                  <Ionicons name="checkmark" size={16} color={Colors.primary} />
-                )}
+                <Text style={[m.optText, selected && m.optTextSel]}>{item.label}</Text>
+                {selected && <Ionicons name="checkmark" size={16} color={Colors.primary} />}
               </Pressable>
             );
           }}
         />
-        <Pressable style={pick.cancelBtn} onPress={onClose}>
-          <Text style={pick.cancelText}>Cancel</Text>
+        <Pressable style={m.cancel} onPress={onClose}>
+          <Text style={m.cancelText}>Cancel</Text>
         </Pressable>
       </View>
     </Modal>
   );
 }
 
-const pick = StyleSheet.create({
-  overlay: {
-    flex: 1, backgroundColor: 'rgba(26,46,34,0.45)',
-  },
+const m = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(26,46,34,0.45)" },
   sheet: {
-    backgroundColor: Colors.bgCard,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 12,
-    paddingHorizontal: 20,
-    paddingBottom: 32,
-    maxHeight: '65%',
+    backgroundColor: Colors.bgCard, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingTop: 12, paddingHorizontal: 20, paddingBottom: 32, maxHeight: "65%",
   },
-  handle: {
-    width: 36, height: 4, borderRadius: 2,
-    backgroundColor: Colors.divider,
-    alignSelf: 'center', marginBottom: 16,
-  },
-  title: {
-    fontSize: 17, fontFamily: 'DM_Sans_700Bold',
-    color: Colors.text, marginBottom: 4,
-  },
-  sub: {
-    fontSize: 12, fontFamily: 'DM_Sans_400Regular',
-    color: Colors.textMuted, marginBottom: 12,
-  },
-  list: { maxHeight: 280 },
+  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.divider, alignSelf: "center", marginBottom: 16 },
+  title: { fontSize: 17, fontFamily: "DM_Sans_700Bold", color: Colors.text, marginBottom: 12 },
   option: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12, paddingHorizontal: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.divider,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingVertical: 13, paddingHorizontal: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.divider,
   },
-  optionSelected: {
-    backgroundColor: Colors.primaryMuted,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    marginHorizontal: -6,
-  },
-  optionText: {
-    fontSize: 15, fontFamily: 'DM_Sans_500Medium',
-    color: Colors.textSecondary,
-  },
-  optionTextSelected: {
-    color: Colors.primary,
-    fontFamily: 'DM_Sans_700Bold',
-  },
-  cancelBtn: {
-    marginTop: 14, alignItems: 'center', paddingVertical: 10,
-  },
-  cancelText: {
-    fontSize: 14, fontFamily: 'DM_Sans_500Medium',
-    color: Colors.textMuted,
-  },
+  optSel: { backgroundColor: Colors.primaryMuted, borderRadius: 10, paddingHorizontal: 10, marginHorizontal: -6 },
+  optText: { fontSize: 15, fontFamily: "DM_Sans_500Medium", color: Colors.textSecondary },
+  optTextSel: { color: Colors.primary, fontFamily: "DM_Sans_700Bold" },
+  cancel: { marginTop: 14, alignItems: "center", paddingVertical: 10 },
+  cancelText: { fontSize: 14, fontFamily: "DM_Sans_500Medium", color: Colors.textMuted },
 });
 
-// ── Reminder time slot row ────────────────────────────────────────────
+// ── Generic list-picker modal ─────────────────────────────────────────
 
-const REMINDER_OPTS: { id: ReminderTime; label: string; icon: string }[] = [
-  { id: 'morning', label: 'Morning', icon: 'cafe-outline' },
-  { id: 'midday',  label: 'Midday',  icon: 'partly-sunny-outline' },
-  { id: 'evening', label: 'Evening', icon: 'moon-outline' },
-];
+function ListPickerModal<T extends { value: any; label: string }>({
+  visible, title, options, selected, onSelect, onClose,
+}: {
+  visible: boolean; title: string;
+  options: T[]; selected: any;
+  onSelect: (v: any) => void; onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={m.overlay} onPress={onClose} />
+      <View style={m.sheet}>
+        <View style={m.handle} />
+        <Text style={m.title}>{title}</Text>
+        {options.map((opt, i) => {
+          const on = opt.value === selected;
+          return (
+            <Pressable
+              key={String(opt.value)}
+              style={[m.option, i === options.length - 1 && { borderBottomWidth: 0 }, on && m.optSel]}
+              onPress={() => { onSelect(opt.value); onClose(); }}
+            >
+              <Text style={[m.optText, on && m.optTextSel]}>{opt.label}</Text>
+              {on && <Ionicons name="checkmark" size={16} color={Colors.primary} />}
+            </Pressable>
+          );
+        })}
+        <Pressable style={m.cancel} onPress={onClose}>
+          <Text style={m.cancelText}>Cancel</Text>
+        </Pressable>
+      </View>
+    </Modal>
+  );
+}
 
-const UNLOCK_WINDOW_OPTS = [5, 10, 15, 30];
-const EXPIRY_WARNING_OPTS: { value: number; label: string }[] = [
-  { value: 1, label: '1 min' },
-  { value: 2, label: '2 min' },
-  { value: 5, label: '5 min' },
-];
-const STREAK_NOTIF_HOUR_OPTS: { value: number; label: string }[] = [
-  { value: 18, label: '6 PM' },
-  { value: 19, label: '7 PM' },
-  { value: 20, label: '8 PM' },
-  { value: 21, label: '9 PM' },
-  { value: 22, label: '10 PM' },
-];
+// ── App selection modal ───────────────────────────────────────────────
 
-// ── Main Settings Screen ──────────────────────────────────────────────
+function AppSelectionModal({
+  visible, selected, onToggle, onClose,
+}: {
+  visible: boolean; selected: string[]; onToggle: (id: string) => void; onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={m.overlay} onPress={onClose} />
+      <View style={[m.sheet, { maxHeight: "75%" }]}>
+        <View style={m.handle} />
+        <Text style={m.title}>Gated Apps</Text>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {DISTRACTING_APPS.map((app, i) => {
+            const on = selected.includes(app.id);
+            return (
+              <Pressable
+                key={app.id}
+                style={[m.option, i === DISTRACTING_APPS.length - 1 && { borderBottomWidth: 0 }]}
+                onPress={() => onToggle(app.id)}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
+                  <View style={[{ width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: app.color + "20" }]}>
+                    <Ionicons
+                      name={app.icon as any} size={18}
+                      color={app.color === "#010101" || app.color === "#FFCA00" ? Colors.text : app.color}
+                    />
+                  </View>
+                  <Text style={m.optText}>{app.name}</Text>
+                </View>
+                <View style={[{ width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: Colors.divider, alignItems: "center", justifyContent: "center" }, on && { backgroundColor: Colors.primary, borderColor: Colors.primary }]}>
+                  {on && <Ionicons name="checkmark" size={13} color={Colors.white} />}
+                </View>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <Pressable style={[m.cancel, { backgroundColor: Colors.primary, borderRadius: 14, marginTop: 8 }]} onPress={onClose}>
+          <Text style={[m.cancelText, { color: Colors.white, fontFamily: "DM_Sans_600SemiBold" }]}>Done</Text>
+        </Pressable>
+      </View>
+    </Modal>
+  );
+}
+
+// ── Focus area modal ──────────────────────────────────────────────────
+
+function FocusAreaModal({
+  visible, selected, onToggle, onClose,
+}: {
+  visible: boolean; selected: BodyArea[]; onToggle: (id: BodyArea) => void; onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={m.overlay} onPress={onClose} />
+      <View style={[m.sheet, { maxHeight: "70%" }]}>
+        <View style={m.handle} />
+        <Text style={m.title}>Focus Areas</Text>
+        <Text style={{ fontSize: 12, fontFamily: "DM_Sans_400Regular", color: Colors.textMuted, marginBottom: 14 }}>
+          Stretches will be tailored to these areas. Leave empty for variety.
+        </Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, paddingBottom: 8 }}>
+          {STRETCH_CATEGORIES.map(cat => {
+            const on = selected.includes(cat.id);
+            return (
+              <Pressable
+                key={cat.id}
+                style={[fa.chip, on && { backgroundColor: Colors.primary, borderColor: Colors.primary }]}
+                onPress={() => onToggle(cat.id)}
+              >
+                <Ionicons name={cat.icon as any} size={13} color={on ? Colors.white : Colors.textSecondary} />
+                <Text style={[fa.chipText, on && { color: Colors.white }]}>{cat.label.split(" ")[0]}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Pressable style={[m.cancel, { backgroundColor: Colors.primary, borderRadius: 14, marginTop: 12 }]} onPress={onClose}>
+          <Text style={[m.cancelText, { color: Colors.white, fontFamily: "DM_Sans_600SemiBold" }]}>Done</Text>
+        </Pressable>
+      </View>
+    </Modal>
+  );
+}
+
+const fa = StyleSheet.create({
+  chip: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20,
+    backgroundColor: Colors.bgSurface, borderWidth: 1.5, borderColor: "transparent",
+  },
+  chipText: { fontSize: 13, fontFamily: "DM_Sans_500Medium", color: Colors.textSecondary },
+});
+
+// ── Main settings screen ──────────────────────────────────────────────
 
 export default function SettingsScreen() {
   const { settings, updateSettings, clearAllData, currentStreak } = useApp();
 
-  const [permStatus, setPermStatus] = useState<'undetermined' | 'granted' | 'denied'>(
+  // Notification permission
+  const [permStatus, setPermStatus] = useState<"undetermined" | "granted" | "denied">(
     settings.notificationPermissionStatus
   );
-  useEffect(() => {
-    setPermStatus(settings.notificationPermissionStatus);
-  }, [settings.notificationPermissionStatus]);
+  useEffect(() => { setPermStatus(settings.notificationPermissionStatus); }, [settings.notificationPermissionStatus]);
 
-  // Family Controls state
+  // Family Controls
   const [fcStatus, setFcStatus] = useState<FamilyControlsStatus>(
-    settings.familyControlsAuthorized ? 'authorized' : 'undetermined'
+    settings.familyControlsAuthorized ? "authorized" : "undetermined"
   );
   const [fcLoading, setFcLoading] = useState(false);
-
   useEffect(() => {
     getFamilyControlsStatus().then(s => {
       setFcStatus(s);
-      if (s === 'authorized' && !settings.familyControlsAuthorized) {
+      if (s === "authorized" && !settings.familyControlsAuthorized)
         updateSettings({ familyControlsAuthorized: true });
-      }
     });
   }, []);
 
   const handleRequestFC = async () => {
-    if (Platform.OS !== 'ios') return;
+    if (Platform.OS !== "ios") return;
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setFcLoading(true);
     try {
       const status = await requestFamilyControlsAuth();
       setFcStatus(status);
-      await updateSettings({ familyControlsAuthorized: status === 'authorized' });
-    } finally {
-      setFcLoading(false);
-    }
+      await updateSettings({ familyControlsAuthorized: status === "authorized" });
+    } finally { setFcLoading(false); }
   };
 
-  // Time picker state
+  // Time picker
   const [pickerVisible, setPickerVisible] = useState(false);
-  const [pickerTarget, setPickerTarget] = useState<ReminderTime>('morning');
-
-  const openTimePicker = (rt: ReminderTime) => {
-    setPickerTarget(rt);
-    setPickerVisible(true);
-  };
-
+  const [pickerTarget, setPickerTarget] = useState<ReminderTime>("morning");
+  const openTimePicker = (rt: ReminderTime) => { setPickerTarget(rt); setPickerVisible(true); };
+  const currentHoursFor = (rt: ReminderTime): ReminderHourConfig =>
+    settings.reminderHours?.[rt] ?? DEFAULT_REMINDER_HOURS[rt];
   const handleTimeSelect = async (cfg: ReminderHourConfig) => {
     const newHours = { ...settings.reminderHours, [pickerTarget]: cfg };
     await updateSettings({ reminderHours: newHours });
     await syncNotifs({ reminderHours: newHours });
   };
 
+  // Modal visibility
+  const [showApps, setShowApps] = useState(false);
+  const [showFocus, setShowFocus] = useState(false);
+  const [showDuration, setShowDuration] = useState(false);
+  const [showWindow, setShowWindow] = useState(false);
+  const [showGoal, setShowGoal] = useState(false);
+
+  // Notification sync
   const syncNotifs = useCallback(
     async (overrides: Partial<typeof settings> = {}) => {
       const merged = { ...settings, ...overrides };
@@ -358,8 +408,9 @@ export default function SettingsScreen() {
     [settings, currentStreak]
   );
 
+  // Handlers
   const toggleApp = async (id: string) => {
-    if (Platform.OS !== 'web') await Haptics.selectionAsync();
+    if (Platform.OS !== "web") await Haptics.selectionAsync();
     const updated = settings.lockedApps.includes(id)
       ? settings.lockedApps.filter(a => a !== id)
       : [...settings.lockedApps, id];
@@ -367,7 +418,7 @@ export default function SettingsScreen() {
   };
 
   const toggleArea = async (id: BodyArea) => {
-    if (Platform.OS !== 'web') await Haptics.selectionAsync();
+    if (Platform.OS !== "web") await Haptics.selectionAsync();
     const updated = settings.focusBodyAreas.includes(id)
       ? settings.focusBodyAreas.filter(a => a !== id)
       : [...settings.focusBodyAreas, id];
@@ -376,8 +427,8 @@ export default function SettingsScreen() {
   };
 
   const toggleReminderMaster = async (enabled: boolean) => {
-    if (Platform.OS !== 'web') await Haptics.selectionAsync();
-    if (enabled && permStatus !== 'granted') {
+    if (Platform.OS !== "web") await Haptics.selectionAsync();
+    if (enabled && permStatus !== "granted") {
       const result = await requestReminderPermissions();
       setPermStatus(result);
       const next = { reminderEnabled: enabled, notificationPermissionStatus: result };
@@ -390,35 +441,18 @@ export default function SettingsScreen() {
   };
 
   const toggleReminderTime = async (id: ReminderTime) => {
-    if (Platform.OS !== 'web') await Haptics.selectionAsync();
+    if (Platform.OS !== "web") await Haptics.selectionAsync();
     const current = settings.selectedReminderTimes;
-    const updated = current.includes(id)
-      ? current.filter(t => t !== id)
-      : [...current, id];
+    const updated = current.includes(id) ? current.filter(t => t !== id) : [...current, id];
     await updateSettings({ selectedReminderTimes: updated });
     await syncNotifs({ selectedReminderTimes: updated });
   };
 
-  const toggleStreakNotif = async (enabled: boolean) => {
-    await updateSettings({ streakNotifEnabled: enabled });
-    await syncNotifs({ streakNotifEnabled: enabled });
-  };
-
-  const handleOpenNotifSettings = async () => {
-    await Linking.openSettings();
-    const newStatus = await getReminderPermissionStatus();
-    setPermStatus(newStatus);
-    await updateSettings({ notificationPermissionStatus: newStatus });
-    if (newStatus === 'granted') {
-      await syncNotifs({ notificationPermissionStatus: newStatus });
-    }
-  };
-
   const openScreenTime = async () => {
-    if (Platform.OS === 'ios') {
-      const url = 'App-Prefs:SCREEN_TIME';
+    if (Platform.OS === "ios") {
+      const url = "App-Prefs:SCREEN_TIME";
       const supported = await Linking.canOpenURL(url).catch(() => false);
-      await Linking.openURL(supported ? url : 'App-Prefs:').catch(() => Linking.openSettings());
+      await Linking.openURL(supported ? url : "App-Prefs:").catch(() => Linking.openSettings());
     } else {
       await Linking.openSettings();
     }
@@ -426,467 +460,239 @@ export default function SettingsScreen() {
 
   const handleReset = () => {
     Alert.alert(
-      'Reset All Data',
-      'This permanently deletes all sessions and preferences. This cannot be undone.',
+      "Reset All Data",
+      "This permanently deletes all sessions and preferences. This cannot be undone.",
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Reset Everything',
-          style: 'destructive',
-          onPress: async () => {
-            await clearAllData();
-            router.replace('/onboarding');
-          },
+          text: "Reset Everything", style: "destructive",
+          onPress: async () => { await clearAllData(); router.replace("/onboarding"); },
         },
       ]
     );
   };
 
-  const permLabel =
-    permStatus === 'granted' ? 'Allowed'
-    : permStatus === 'denied' ? 'Denied \u2014 tap to open Settings'
-    : 'Not requested yet';
-  // \u2014 is em-dash rendered correctly by JS engine
-  const permColor =
-    permStatus === 'granted' ? Colors.primary
-    : permStatus === 'denied' ? Colors.error
-    : Colors.textMuted;
-
-  const currentHoursFor = (rt: ReminderTime): ReminderHourConfig =>
-    settings.reminderHours?.[rt] ?? DEFAULT_REMINDER_HOURS[rt];
+  // Derived values for display
+  const appsLabel = settings.lockedApps.length === 0
+    ? "None" : `${settings.lockedApps.length} app${settings.lockedApps.length > 1 ? "s" : ""}`;
+  const focusLabel = settings.focusBodyAreas.length === 0
+    ? "All areas" : settings.focusBodyAreas.length === 1
+    ? settings.focusBodyAreas[0] : `${settings.focusBodyAreas.length} areas`;
+  const durationLabel = `${settings.preferredDuration}s`;
+  const windowLabel = `${settings.unlockWindowMinutes} min`;
+  const fcLabel = fcStatus === "authorized" ? "Active"
+    : fcStatus === "denied" ? "Denied"
+    : Platform.OS === "ios" && !NativeModules.FamilyControlsModule ? "Dev build required"
+    : "Not authorized";
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Settings</Text>
+    <SafeAreaView style={s.container} edges={["top"]}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 48 }}>
+
+        {/* Header */}
+        <View style={s.header}>
+          <Pressable style={s.backBtn} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={20} color={Colors.text} />
+          </Pressable>
+          <Text style={s.title}>Settings</Text>
         </View>
 
-        {/* ── Gates active ──────────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.duration(380)}>
-          <Section title="MINDFUL GATES">
-            <Row
-              icon="lock-closed-outline"
-              iconBg={settings.gatesActive ? Colors.primaryMuted : Colors.bgSurface}
-              iconColor={settings.gatesActive ? Colors.primary : Colors.textMuted}
-              label="Gates active"
-              sub={settings.gatesActive
-                ? 'Stretch before opening gated apps'
-                : 'Gates paused \u2014 all apps open freely'}
-              divider
-              right={
-                <Switch
-                  value={settings.gatesActive}
-                  onValueChange={v => updateSettings({ gatesActive: v })}
-                  trackColor={{ false: Colors.bgSurface, true: Colors.primary }}
-                  thumbColor={Colors.white}
-                  ios_backgroundColor={Colors.bgSurface}
-                />
-              }
-            />
-            <Text style={styles.sectionSub}>
-              Choose apps you commit to stretching before opening.
-            </Text>
-            {DISTRACTING_APPS.map((app, i) => (
-              <AppRow
-                key={app.id}
-                app={app}
-                checked={settings.lockedApps.includes(app.id)}
-                onToggle={() => toggleApp(app.id)}
-                divider={i < DISTRACTING_APPS.length - 1}
-              />
-            ))}
-          </Section>
-        </Animated.View>
+        {/* ── Mindful Gates ────────────────────────────────────── */}
+        <Section title="MINDFUL GATES">
+          <ToggleRow
+            icon="lock-closed-outline"
+            iconBg={settings.gatesActive ? Colors.primaryMuted : Colors.bgSurface}
+            iconColor={settings.gatesActive ? Colors.primary : Colors.textMuted}
+            label="Gates active"
+            value={settings.gatesActive}
+            onChange={v => updateSettings({ gatesActive: v })}
+            divider
+          />
+          <NavRow
+            icon="apps-outline"
+            iconBg="rgba(58,122,92,0.1)"
+            label="Gated apps"
+            value={appsLabel}
+            onPress={() => setShowApps(true)}
+            divider={false}
+          />
+        </Section>
 
         {/* ── Reminders ────────────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.duration(380).delay(50)}>
-          <Section title="REMINDERS">
-            <Row
-              icon="notifications-outline"
-              iconBg="rgba(58,122,92,0.12)"
-              label="Daily reminders"
-              sub="Nudge yourself to stretch at key times"
-              divider={settings.reminderEnabled}
-              right={
-                <Switch
-                  value={settings.reminderEnabled}
-                  onValueChange={toggleReminderMaster}
-                  trackColor={{ false: Colors.bgSurface, true: Colors.primary }}
-                  thumbColor={Colors.white}
-                  ios_backgroundColor={Colors.bgSurface}
-                />
-              }
-            />
-
-            {settings.reminderEnabled && (
-              <>
-                {/* Time slot rows */}
-                {REMINDER_OPTS.map((opt, i) => {
-                  const on = settings.selectedReminderTimes.includes(opt.id);
-                  const cfg = currentHoursFor(opt.id);
-                  return (
-                    <View
-                      key={opt.id}
-                      style={[
-                        styles.reminderRow,
-                        i === REMINDER_OPTS.length - 1 && { borderBottomWidth: 0 },
-                      ]}
-                    >
-                      <Pressable
-                        style={[styles.reminderToggleArea]}
-                        onPress={() => toggleReminderTime(opt.id)}
-                      >
-                        <Ionicons
-                          name={opt.icon as any}
-                          size={15}
-                          color={on ? Colors.primary : Colors.textMuted}
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.reminderLabel, on && { color: Colors.primary }]}>
-                            {opt.label}
-                          </Text>
-                        </View>
-                        <View style={[styles.remCheck, on && styles.remCheckOn]}>
-                          {on && <Ionicons name="checkmark" size={11} color={Colors.white} />}
-                        </View>
-                      </Pressable>
-                      {on && (
-                        <Pressable
-                          style={styles.timeChip}
-                          onPress={() => openTimePicker(opt.id)}
-                        >
-                          <Text style={styles.timeChipText}>{formatHourConfig(cfg)}</Text>
-                          <Ionicons name="chevron-down" size={11} color={Colors.primary} />
-                        </Pressable>
-                      )}
-                    </View>
-                  );
-                })}
-
-                {/* Permission row */}
-                <Pressable
-                  style={styles.permRow}
-                  onPress={permStatus === 'denied' ? handleOpenNotifSettings : undefined}
-                  disabled={permStatus !== 'denied'}
-                >
-                  <View style={[styles.permDot, { backgroundColor: permColor }]} />
-                  <Text style={[styles.permText, { color: permColor }]}>{permLabel}</Text>
-                  {permStatus === 'denied' && (
-                    <Ionicons
-                      name="chevron-forward"
-                      size={13}
-                      color={permColor}
-                      style={{ marginLeft: 'auto' }}
-                    />
-                  )}
-                </Pressable>
-              </>
-            )}
-          </Section>
-        </Animated.View>
-
-        {/* ── Streak protection ─────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.duration(380).delay(90)}>
-          <Section title="STREAK PROTECTION">
-            <Row
-              icon="flame-outline"
-              iconBg="rgba(201,106,50,0.12)"
-              iconColor={Colors.accent}
-              label="Streak reminder"
-              sub="Alert if you haven't stretched by evening"
-              divider={settings.streakNotifEnabled}
-              right={
-                <Switch
-                  value={settings.streakNotifEnabled}
-                  onValueChange={toggleStreakNotif}
-                  trackColor={{ false: Colors.bgSurface, true: Colors.primary }}
-                  thumbColor={Colors.white}
-                  ios_backgroundColor={Colors.bgSurface}
-                />
-              }
-            />
-            {settings.streakNotifEnabled && (
-              <View style={styles.chipRowWrap}>
-                <Text style={styles.chipRowLabel}>Remind me at</Text>
-                <View style={styles.chipRow}>
-                  {STREAK_NOTIF_HOUR_OPTS.map(opt => {
-                    const on = settings.streakNotifHour === opt.value;
-                    return (
-                      <Pressable
-                        key={opt.value}
-                        style={[styles.smallChip, on && styles.smallChipOn]}
-                        onPress={async () => {
-                          await updateSettings({ streakNotifHour: opt.value });
-                          await syncNotifs({ streakNotifHour: opt.value });
-                        }}
-                      >
-                        <Text style={[styles.smallChipText, on && styles.smallChipTextOn]}>
-                          {opt.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
-          </Section>
-        </Animated.View>
-
-        {/* ── Unlock window ─────────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.duration(380).delay(130)}>
-          <Section title="UNLOCK WINDOW">
-            <Text style={styles.sectionSub}>
-              How long you stay unlocked after completing a stretch
-            </Text>
-            <View style={styles.chipRow}>
-              {UNLOCK_WINDOW_OPTS.map(val => {
-                const on = settings.unlockWindowMinutes === val;
-                return (
-                  <Pressable
-                    key={val}
-                    style={[styles.windowChip, on && styles.windowChipOn]}
-                    onPress={() => updateSettings({ unlockWindowMinutes: val })}
-                  >
-                    <Text style={[styles.windowChipText, on && styles.windowChipTextOn]}>
-                      {val} min
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {/* Expiry alert sub-section */}
-            <View style={[styles.subSep, { marginTop: 4 }]} />
-            <Row
-              icon="alarm-outline"
-              iconBg="rgba(201,106,50,0.12)"
-              iconColor={Colors.accent}
-              label="Expiry alert"
-              sub="Notify before your unlock window closes"
-              divider={settings.unlockExpiryNotifEnabled}
-              right={
-                <Switch
-                  value={settings.unlockExpiryNotifEnabled}
-                  onValueChange={v => updateSettings({ unlockExpiryNotifEnabled: v })}
-                  trackColor={{ false: Colors.bgSurface, true: Colors.primary }}
-                  thumbColor={Colors.white}
-                  ios_backgroundColor={Colors.bgSurface}
-                />
-              }
-            />
-            {settings.unlockExpiryNotifEnabled && (
-              <View style={styles.chipRowWrap}>
-                <Text style={styles.chipRowLabel}>Warn me</Text>
-                <View style={styles.chipRow}>
-                  {EXPIRY_WARNING_OPTS.map(opt => {
-                    const on = settings.unlockExpiryWarningMinutes === opt.value;
-                    return (
-                      <Pressable
-                        key={opt.value}
-                        style={[styles.smallChip, on && styles.smallChipOn]}
-                        onPress={() => updateSettings({ unlockExpiryWarningMinutes: opt.value })}
-                      >
-                        <Text style={[styles.smallChipText, on && styles.smallChipTextOn]}>
-                          {opt.label} before
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
-          </Section>
-        </Animated.View>
-
-        {/* ── Focus areas ───────────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.duration(380).delay(170)}>
-          <Section title="FOCUS AREAS">
-            <Text style={styles.sectionSub}>
-              Stretches will be tailored to these areas. Leave empty for variety.
-            </Text>
-            <View style={styles.areaGrid}>
-              {STRETCH_CATEGORIES.map(cat => {
-                const on = settings.focusBodyAreas.includes(cat.id);
-                return (
-                  <Pressable
-                    key={cat.id}
-                    style={[styles.areaChip, on && { backgroundColor: cat.color, borderColor: cat.color }]}
-                    onPress={() => toggleArea(cat.id)}
-                  >
-                    <Ionicons name={cat.icon as any} size={13} color={on ? '#fff' : Colors.textSecondary} />
-                    <Text style={[styles.areaChipText, on && { color: '#fff' }]}>
-                      {cat.label.split(' ')[0]}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Section>
-        </Animated.View>
-
-        {/* ── Daily goal ────────────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.duration(380).delay(210)}>
-          <Section title="DAILY GOAL">
-            <Text style={styles.sectionSub}>Target stretches per day</Text>
-            <View style={styles.chipRow}>
-              {[1, 2, 3, 5, 7, 10].map(g => {
-                const on = settings.dailyGoal === g;
-                return (
-                  <Pressable
-                    key={g}
-                    style={[styles.goalChip, on && styles.goalChipOn]}
-                    onPress={() => updateSettings({ dailyGoal: g })}
-                  >
-                    <Text style={[styles.goalChipText, on && styles.goalChipTextOn]}>{g}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Section>
-        </Animated.View>
-
-        {/* ── Family Controls ───────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.duration(380).delay(250)}>
-          <Section title="SCREEN TIME & FAMILY CONTROLS">
-            {/* Expo Go / no native module banner */}
-            {Platform.OS === 'ios' && !NativeModules.FamilyControlsModule && (
-              <View style={styles.fcInfoBanner}>
-                <Ionicons name="information-circle-outline" size={16} color="#5856D6" />
-                <Text style={styles.fcInfoText}>
-                  Automatic detection requires a custom build with the{' '}
-                  <Text style={styles.fcInfoBold}>com.apple.developer.family-controls</Text>{' '}
-                  entitlement. Honor-system mode is active in Expo Go.
-                </Text>
-              </View>
-            )}
-
-            <Row
-              icon="shield-checkmark-outline"
-              iconBg={fcStatus === 'authorized' ? Colors.primaryMuted : 'rgba(201,106,50,0.12)'}
-              iconColor={fcStatus === 'authorized' ? Colors.primary : Colors.accent}
-              label="Apple Screen Time Access"
-              sub={
-                fcStatus === 'authorized'
-                  ? 'Authorized — Streach Gate detects when gated apps open'
-                  : fcStatus === 'denied'
-                  ? 'Denied — honor-system mode is active'
-                  : Platform.OS === 'ios' && !NativeModules.FamilyControlsModule
-                  ? 'Requires a dev build — honor-system mode is active'
-                  : 'Not yet authorized — grant access for automatic detection'
-              }
-              divider
-              right={
-                fcStatus === 'authorized' ? (
-                  <View style={styles.statusBadge}>
-                    <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
-                    <Text style={styles.statusBadgeText}>Active</Text>
+        <Section title="REMINDERS">
+          <ToggleRow
+            icon="notifications-outline"
+            iconBg="rgba(58,122,92,0.1)"
+            label="Daily reminders"
+            sub={settings.reminderEnabled && permStatus === "denied" ? "Permission denied — tap to open Settings" : undefined}
+            value={settings.reminderEnabled}
+            onChange={toggleReminderMaster}
+            divider={settings.reminderEnabled}
+          />
+          {settings.reminderEnabled && REMINDER_OPTS.map((opt, i) => {
+            const on = settings.selectedReminderTimes.includes(opt.id);
+            const cfg = currentHoursFor(opt.id);
+            return (
+              <View
+                key={opt.id}
+                style={[s.row, i === REMINDER_OPTS.length - 1 && { borderBottomWidth: 0 }]}
+              >
+                <Pressable style={s.reminderLeft} onPress={() => toggleReminderTime(opt.id)}>
+                  <View style={[s.rowIcon, { backgroundColor: on ? Colors.primaryMuted : Colors.bgSurface }]}>
+                    <Ionicons name={opt.icon as any} size={20} color={on ? Colors.primary : Colors.textMuted} />
                   </View>
-                ) : (
-                  <Pressable
-                    style={[
-                      styles.grantBtn,
-                      (fcLoading || (Platform.OS === 'ios' && !NativeModules.FamilyControlsModule))
-                        && { opacity: 0.4 },
-                    ]}
-                    onPress={handleRequestFC}
-                    disabled={fcLoading || (Platform.OS === 'ios' && !NativeModules.FamilyControlsModule)}
-                  >
-                    <Text style={styles.grantBtnText}>
-                      {fcLoading ? 'Requesting…' : 'Grant Access'}
-                    </Text>
+                  <Text style={[s.rowLabel, !on && { color: Colors.textSecondary }]}>{opt.label}</Text>
+                </Pressable>
+                {on ? (
+                  <Pressable style={s.timeChip} onPress={() => openTimePicker(opt.id)}>
+                    <Text style={s.timeChipText}>{formatHourConfig(cfg)}</Text>
+                    <Ionicons name="chevron-down" size={11} color={Colors.primary} />
                   </Pressable>
-                )
-              }
-            />
-
-            {/* Honor system explanation */}
-            <View style={styles.honorBox}>
-              <View style={styles.honorRow}>
-                <Ionicons name="hand-left-outline" size={15} color={Colors.textMuted} />
-                <Text style={styles.honorText}>
-                  <Text style={styles.honorBold}>Honor system mode</Text>
-                  {' '}— Without Screen Time access, open Streach Gate manually before scrolling. The habit still builds.
-                </Text>
+                ) : (
+                  <View style={[s.remCheck]}>
+                    <View style={s.remDot} />
+                  </View>
+                )}
               </View>
-            </View>
+            );
+          })}
+        </Section>
 
-            <Row
-              icon="time-outline"
-              iconBg="rgba(88,86,214,0.12)"
-              iconColor="#5856D6"
-              label="Open iOS Screen Time Settings"
-              sub="Set hard daily limits for distracting apps"
-              onPress={openScreenTime}
-              divider={false}
-            />
-          </Section>
-        </Animated.View>
+        {/* ── Stretch settings ─────────────────────────────────── */}
+        <Section title="STRETCH SETTINGS">
+          <NavRow
+            icon="body-outline"
+            iconBg="rgba(58,122,92,0.1)"
+            label="Focus areas"
+            value={focusLabel}
+            onPress={() => setShowFocus(true)}
+            divider
+          />
+          <NavRow
+            icon="timer-outline"
+            iconBg="rgba(58,122,92,0.1)"
+            label="Duration"
+            value={durationLabel}
+            onPress={() => setShowDuration(true)}
+            divider
+          />
+          <NavRow
+            icon="flag-outline"
+            iconBg="rgba(58,122,92,0.1)"
+            label="Daily goal"
+            value={`${settings.dailyGoal} stretch${settings.dailyGoal > 1 ? "es" : ""}`}
+            onPress={() => setShowGoal(true)}
+            divider
+          />
+          <NavRow
+            icon="hourglass-outline"
+            iconBg="rgba(58,122,92,0.1)"
+            label="Unlock window"
+            value={windowLabel}
+            onPress={() => setShowWindow(true)}
+            divider={false}
+          />
+        </Section>
 
-        {/* ── Preferences ───────────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.duration(380).delay(290)}>
-          <Section title="PREFERENCES">
-            <Row
-              icon="phone-portrait-outline"
-              iconBg="rgba(88,86,214,0.12)"
-              iconColor="#5856D6"
-              label="Haptic feedback"
-              sub="Vibration on key interactions"
-              divider={false}
-              right={
-                <Switch
-                  value={settings.hapticEnabled}
-                  onValueChange={v => updateSettings({ hapticEnabled: v })}
-                  trackColor={{ false: Colors.bgSurface, true: Colors.primary }}
-                  thumbColor={Colors.white}
-                  ios_backgroundColor={Colors.bgSurface}
-                />
-              }
-            />
-          </Section>
-        </Animated.View>
+        {/* ── Notifications ────────────────────────────────────── */}
+        <Section title="NOTIFICATIONS">
+          <ToggleRow
+            icon="flame-outline"
+            iconBg="rgba(201,106,50,0.1)"
+            iconColor={Colors.accent}
+            label="Streak reminder"
+            sub="Alert if you haven't stretched by evening"
+            value={settings.streakNotifEnabled}
+            onChange={async v => { await updateSettings({ streakNotifEnabled: v }); await syncNotifs({ streakNotifEnabled: v }); }}
+            divider
+          />
+          <ToggleRow
+            icon="alarm-outline"
+            iconBg="rgba(201,106,50,0.1)"
+            iconColor={Colors.accent}
+            label="Expiry alert"
+            sub="Notify before your unlock window closes"
+            value={settings.unlockExpiryNotifEnabled}
+            onChange={v => updateSettings({ unlockExpiryNotifEnabled: v })}
+            divider={false}
+          />
+        </Section>
 
-        {/* ── Support ───────────────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.duration(380).delay(330)}>
-          <Section title="SUPPORT">
-            <Row
-              icon="shield-checkmark-outline"
-              iconBg={Colors.primaryMuted}
-              label="Privacy Policy"
-              onPress={() => Linking.openURL('https://stretchgate.app/privacy')}
-              divider
-            />
-            <Row
-              icon="mail-outline"
-              iconBg={Colors.primaryMuted}
-              label="Contact Support"
-              sub="hello@stretchgate.app"
-              onPress={() => Linking.openURL('mailto:hello@stretchgate.app')}
-              divider={false}
-            />
-          </Section>
-        </Animated.View>
+        {/* ── Screen Time ───────────────────────────────────────── */}
+        <Section title="SCREEN TIME">
+          <NavRow
+            icon="shield-checkmark-outline"
+            iconBg={fcStatus === "authorized" ? Colors.primaryMuted : "rgba(201,106,50,0.1)"}
+            iconColor={fcStatus === "authorized" ? Colors.primary : Colors.accent}
+            label="Apple Screen Time Access"
+            value={fcLabel}
+            onPress={fcStatus !== "authorized" && !fcLoading && !!NativeModules.FamilyControlsModule ? handleRequestFC : undefined}
+            divider
+          />
+          <NavRow
+            icon="time-outline"
+            iconBg="rgba(88,86,214,0.12)"
+            iconColor="#5856D6"
+            label="Open iOS Screen Time"
+            onPress={openScreenTime}
+            divider={false}
+          />
+        </Section>
 
-        {/* ── Danger ────────────────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.duration(380).delay(370)}>
-          <Section title="DANGER ZONE">
-            <Row
-              icon="trash-outline"
-              iconBg={Colors.errorMuted}
-              iconColor={Colors.error}
-              label="Reset all data"
-              sub="Permanently delete sessions and settings"
-              onPress={handleReset}
-              danger
-              divider={false}
-            />
-          </Section>
-        </Animated.View>
+        {/* ── Preferences ──────────────────────────────────────── */}
+        <Section title="PREFERENCES">
+          <ToggleRow
+            icon="phone-portrait-outline"
+            iconBg="rgba(88,86,214,0.12)"
+            iconColor="#5856D6"
+            label="Haptic feedback"
+            value={settings.hapticEnabled}
+            onChange={v => updateSettings({ hapticEnabled: v })}
+            divider={false}
+          />
+        </Section>
 
-        <View style={{ height: 110 }} />
+        {/* ── Support ──────────────────────────────────────────── */}
+        <Section title="SUPPORT">
+          <NavRow
+            icon="document-text-outline"
+            iconBg={Colors.primaryMuted}
+            label="Privacy Policy"
+            onPress={() => Linking.openURL("https://stretchgate.app/privacy")}
+            divider
+          />
+          <NavRow
+            icon="mail-outline"
+            iconBg={Colors.primaryMuted}
+            label="Contact Support"
+            value="hello@stretchgate.app"
+            onPress={() => Linking.openURL("mailto:hello@stretchgate.app")}
+            divider={false}
+          />
+        </Section>
+
+        {/* Version info */}
+        <View style={s.infoCard}>
+          <Text style={s.infoLabel}>Version</Text>
+          <Text style={s.infoValue}>1.0.0</Text>
+        </View>
+
+        {/* ── Danger Zone ──────────────────────────────────────── */}
+        <Section title="">
+          <NavRow
+            icon="trash-outline"
+            iconBg="rgba(220,53,69,0.1)"
+            iconColor={Colors.error}
+            label="Reset All Data"
+            labelColor={Colors.error}
+            onPress={handleReset}
+            divider={false}
+          />
+        </Section>
+
       </ScrollView>
 
-      {/* Time picker modal */}
+      {/* Modals */}
       <TimePickerModal
         visible={pickerVisible}
         reminderTime={pickerTarget}
@@ -894,198 +700,115 @@ export default function SettingsScreen() {
         onSelect={handleTimeSelect}
         onClose={() => setPickerVisible(false)}
       />
+      <AppSelectionModal
+        visible={showApps}
+        selected={settings.lockedApps}
+        onToggle={toggleApp}
+        onClose={() => setShowApps(false)}
+      />
+      <FocusAreaModal
+        visible={showFocus}
+        selected={settings.focusBodyAreas}
+        onToggle={toggleArea}
+        onClose={() => setShowFocus(false)}
+      />
+      <ListPickerModal
+        visible={showDuration}
+        title="Stretch Duration"
+        options={[
+          { value: 20, label: "20 seconds — Quick reset" },
+          { value: 45, label: "45 seconds — Sweet spot" },
+          { value: 60, label: "60 seconds — Deep stretch" },
+        ]}
+        selected={settings.preferredDuration}
+        onSelect={v => updateSettings({ preferredDuration: v })}
+        onClose={() => setShowDuration(false)}
+      />
+      <ListPickerModal
+        visible={showWindow}
+        title="Unlock Window"
+        options={UNLOCK_WINDOW_OPTS.map(v => ({ value: v, label: `${v} minutes` }))}
+        selected={settings.unlockWindowMinutes}
+        onSelect={v => updateSettings({ unlockWindowMinutes: v })}
+        onClose={() => setShowWindow(false)}
+      />
+      <ListPickerModal
+        visible={showGoal}
+        title="Daily Goal"
+        options={[1, 2, 3, 5, 7, 10].map(v => ({ value: v, label: `${v} stretch${v > 1 ? "es" : ""} per day` }))}
+        selected={settings.dailyGoal}
+        onSelect={v => updateSettings({ dailyGoal: v })}
+        onClose={() => setShowGoal(false)}
+      />
     </SafeAreaView>
   );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  header: { paddingHorizontal: 20, paddingTop: 8, marginBottom: 8 },
-  title: { fontSize: 27, fontFamily: 'DM_Sans_700Bold', color: Colors.text, letterSpacing: -0.4 },
-  section: { marginBottom: 6 },
-  sectionTitle: {
-    fontSize: 11, fontFamily: 'DM_Sans_600SemiBold',
-    color: Colors.textMuted, letterSpacing: 0.9,
-    textTransform: 'uppercase', paddingHorizontal: 20,
-    marginTop: 22, marginBottom: 6,
-  },
-  sectionCard: {
-    marginHorizontal: 20, backgroundColor: Colors.bgCard,
-    borderRadius: 16, overflow: 'hidden',
+
+  header: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 20 },
+  backBtn: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: Colors.bgCard,
     borderWidth: 1, borderColor: Colors.divider,
+    alignItems: "center", justifyContent: "center",
+    marginBottom: 16,
+  },
+  title: { fontSize: 32, fontFamily: "DM_Sans_700Bold", color: Colors.text, letterSpacing: -0.8 },
+
+  section: { marginBottom: 4 },
+  sectionTitle: {
+    fontSize: 11, fontFamily: "DM_Sans_600SemiBold",
+    color: Colors.textMuted, letterSpacing: 1,
+    textTransform: "uppercase",
+    paddingHorizontal: 20, marginTop: 20, marginBottom: 6,
+  },
+  card: {
+    marginHorizontal: 16,
+    backgroundColor: Colors.bgCard,
+    borderRadius: 18,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: Colors.divider,
     paddingHorizontal: 16,
   },
-  sectionSub: {
-    fontSize: 12, fontFamily: 'DM_Sans_400Regular',
-    color: Colors.textMuted, lineHeight: 17,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.divider,
-  },
-  subSep: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.divider,
-    marginHorizontal: -16,
-  },
+
   row: {
-    flexDirection: 'row', alignItems: 'center',
-    gap: 12, paddingVertical: 11,
+    flexDirection: "row", alignItems: "center",
+    gap: 13, paddingVertical: 13,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.divider,
+    minHeight: 52,
   },
   rowIcon: {
-    width: 34, height: 34, borderRadius: 9,
-    alignItems: 'center', justifyContent: 'center',
+    width: 36, height: 36, borderRadius: 10,
+    alignItems: "center", justifyContent: "center",
+    flexShrink: 0,
   },
-  rowInfo: { flex: 1 },
-  rowLabel: { fontSize: 14, fontFamily: 'DM_Sans_500Medium', color: Colors.text },
-  rowSub: { fontSize: 11, fontFamily: 'DM_Sans_400Regular', color: Colors.textMuted, marginTop: 1 },
-  rowValue: { fontSize: 14, fontFamily: 'DM_Sans_400Regular', color: Colors.textSecondary, marginRight: 4 },
-  checkbox: {
-    width: 22, height: 22, borderRadius: 6,
-    borderWidth: 1.5, borderColor: Colors.textMuted,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  checkboxOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  areaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 12 },
-  areaChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 13, paddingVertical: 8,
-    borderRadius: 20, backgroundColor: Colors.bgSurface,
-    borderWidth: 1.5, borderColor: 'transparent',
-  },
-  areaChipText: { fontSize: 13, fontFamily: 'DM_Sans_500Medium', color: Colors.textSecondary },
+  rowLabel: { flex: 1, fontSize: 15, fontFamily: "DM_Sans_500Medium", color: Colors.text },
+  rowSub: { fontSize: 11.5, fontFamily: "DM_Sans_400Regular", color: Colors.textMuted, marginTop: 1 },
+  rowValue: { fontSize: 14, fontFamily: "DM_Sans_400Regular", color: Colors.textSecondary, marginRight: 2 },
 
-  // Generic chip row
-  chipRow: {
-    flexDirection: 'row', flexWrap: 'wrap',
-    gap: 8, paddingVertical: 12,
-  },
-  chipRowWrap: { paddingBottom: 10 },
-  chipRowLabel: {
-    fontSize: 11, fontFamily: 'DM_Sans_500Medium',
-    color: Colors.textMuted, textTransform: 'uppercase',
-    letterSpacing: 0.6, marginBottom: 8, marginTop: 4,
-  },
-
-  // Goal chips (square)
-  goalChip: {
-    width: 46, height: 46, borderRadius: 13,
-    backgroundColor: Colors.bgSurface, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: 'transparent',
-  },
-  goalChipOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  goalChipText: { fontSize: 16, fontFamily: 'DM_Sans_700Bold', color: Colors.textSecondary },
-  goalChipTextOn: { color: Colors.white },
-
-  // Unlock window chips
-  windowChip: {
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12,
-    backgroundColor: Colors.bgSurface,
-    borderWidth: 1.5, borderColor: 'transparent',
-  },
-  windowChipOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  windowChipText: { fontSize: 14, fontFamily: 'DM_Sans_600SemiBold', color: Colors.textSecondary },
-  windowChipTextOn: { color: Colors.white },
-
-  // Small chips (streak hour, expiry warning)
-  smallChip: {
-    paddingHorizontal: 13, paddingVertical: 8, borderRadius: 12,
-    backgroundColor: Colors.bgSurface,
-    borderWidth: 1.5, borderColor: 'transparent',
-  },
-  smallChipOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  smallChipText: { fontSize: 13, fontFamily: 'DM_Sans_600SemiBold', color: Colors.textSecondary },
-  smallChipTextOn: { color: Colors.white },
-
-  // Reminder slot rows
-  reminderRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.divider,
-    gap: 8,
-  },
-  reminderToggleArea: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10,
-  },
-  reminderLabel: {
-    fontSize: 14, fontFamily: 'DM_Sans_500Medium', color: Colors.textSecondary,
-  },
-  remCheck: {
-    width: 20, height: 20, borderRadius: 6,
-    borderWidth: 1.5, borderColor: Colors.textMuted,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  remCheckOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  reminderLeft: { flexDirection: "row", alignItems: "center", gap: 13, flex: 1 },
+  remCheck: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },
+  remDot: { width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: Colors.divider },
   timeChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Colors.primaryMuted,
-    paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: 10,
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: Colors.primaryMuted, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10,
   },
-  timeChipText: {
-    fontSize: 12, fontFamily: 'DM_Sans_700Bold', color: Colors.primary,
-  },
+  timeChipText: { fontSize: 12, fontFamily: "DM_Sans_700Bold", color: Colors.primary },
 
-  // Permission row
-  permRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.divider,
-  },
-  permDot: { width: 7, height: 7, borderRadius: 4 },
-  permText: { fontSize: 12, fontFamily: 'DM_Sans_500Medium' },
-
-  // Family Controls
-  statusBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Colors.primaryMuted,
-    borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4,
-  },
-  statusBadgeText: {
-    fontSize: 11, fontFamily: 'DM_Sans_600SemiBold', color: Colors.primary,
-  },
-  grantBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5,
-  },
-  grantBtnText: {
-    fontSize: 12, fontFamily: 'DM_Sans_600SemiBold', color: Colors.white,
-  },
-
-  // Family Controls info banner (Expo Go warning)
-  fcInfoBanner: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: 'rgba(88,86,214,0.08)',
-    borderRadius: 10, padding: 10, marginBottom: 4,
-    borderWidth: 1, borderColor: 'rgba(88,86,214,0.18)',
-  },
-  fcInfoText: {
-    flex: 1, fontSize: 11.5, fontFamily: 'DM_Sans_400Regular',
-    color: Colors.textSecondary, lineHeight: 17,
-  },
-  fcInfoBold: {
-    fontFamily: 'DM_Sans_600SemiBold', color: '#5856D6',
-  },
-
-  // Honor system explanation box
-  honorBox: {
-    backgroundColor: Colors.bgSurface, borderRadius: 10,
-    padding: 10, marginVertical: 6,
+  infoCard: {
+    marginHorizontal: 16, marginTop: 4,
+    backgroundColor: Colors.bgCard,
+    borderRadius: 18, overflow: "hidden",
     borderWidth: 1, borderColor: Colors.divider,
+    paddingHorizontal: 20, paddingVertical: 15,
+    flexDirection: "row", alignItems: "center",
   },
-  honorRow: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-  },
-  honorText: {
-    flex: 1, fontSize: 12, fontFamily: 'DM_Sans_400Regular',
-    color: Colors.textMuted, lineHeight: 18,
-  },
-  honorBold: {
-    fontFamily: 'DM_Sans_600SemiBold', color: Colors.textSecondary,
-  },
-
+  infoLabel: { flex: 1, fontSize: 15, fontFamily: "DM_Sans_500Medium", color: Colors.text },
+  infoValue: { fontSize: 14, fontFamily: "DM_Sans_400Regular", color: Colors.textSecondary },
 });

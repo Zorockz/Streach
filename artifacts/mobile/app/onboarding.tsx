@@ -65,7 +65,11 @@ function NextButton({
       entering={FadeInDown.duration(500).delay(1400)}
       style={[sh.tapWrap, { paddingBottom: Math.max(bottom + 28, 44) }]}
     >
-      <Pressable onPress={handlePress} disabled={loading || disabled}>
+      <Pressable
+        onPress={handlePress}
+        disabled={loading || disabled}
+        style={{ paddingVertical: 18, paddingHorizontal: 56 }}
+      >
         {loading ? (
           <ActivityIndicator color={Colors.textMuted} size="small" />
         ) : (
