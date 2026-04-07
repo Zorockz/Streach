@@ -1,0 +1,256 @@
+You are editing my existing iOS-first Expo / React Native app repo.
+
+This is a narrow implementation task.
+Do NOT redesign the whole app.
+Do NOT add new product ideas.
+Do NOT keep any fake or honor-system Screen Time behavior.
+Do NOT keep the unlock window feature.
+Only make the minimum targeted changes required to fix Screen Time, clean up settings, and correct the support/legal info.
+
+==================================================
+GOAL
+==================================================
+
+Implement Apple Screen Time properly for my app using the real iOS frameworks and simplify the Settings page.
+
+I want the product to work like this:
+- A person selects which apps/categories they want to lock
+- A person chooses the times when those apps should be locked
+- During those scheduled times, the selected apps/categories are blocked using Apple Screen Time APIs
+- There should be NO unlock window feature
+- There should be NO “temporary unlock for X minutes” feature
+- The app should request Screen Time permission correctly
+- The support email and privacy policy must be correct everywhere
+- The Settings page should be much simpler and more focused
+
+==================================================
+USE APPLE SCREEN TIME THE RIGHT WAY
+==================================================
+
+Follow Apple’s Family Controls / Screen Time setup correctly.
+
+Use:
+- FamilyControls
+- ManagedSettings
+- DeviceActivity
+
+Use them appropriately:
+- request Screen Time authorization properly
+- use FamilyActivityPicker for choosing apps/categories
+- use ManagedSettingsStore to shield selected apps/categories
+- use DeviceActivity for scheduled lock periods
+
+Do not fake this with JS-only logic.
+Do not keep any pretend lock behavior as the main implementation.
+
+If native modules, extensions, entitlements, or iOS targets are missing, inspect and add only what is necessary.
+If this requires a development build or native iOS project instead of Expo Go, wire it correctly.
+
+==================================================
+MY REQUIRED FIXES
+==================================================
+
+1. SCREEN TIME PERMISSION
+Problem:
+- My app is not asking for Screen Time access even though I already have the Family Controls entitlement from Apple.
+
+Fix:
+- Inspect why authorization is not being requested
+- Make sure the native Screen Time authorization flow is wired correctly
+- Make sure it is triggered from the correct setup/settings flow
+- Make sure the app reflects the real authorization state
+- Make sure the app no longer relies on fake fallback behavior
+
+2. SUPPORT EMAIL
+Correct support email:
+simodigitalagency@gmail.com
+
+Fix:
+- Find every place the wrong support email is used
+- Replace it everywhere
+- Centralize it if needed so it is not duplicated again
+
+3. PRIVACY POLICY URL
+Correct privacy policy URL:
+https://www.termsfeed.com/live/ee6484bf-6c19-4aca-baed-79f084570331
+
+Fix:
+- Find every place the wrong privacy policy URL is used
+- Replace it everywhere
+- Centralize it if needed so it is not duplicated again
+
+4. SETTINGS PAGE IS TOO BLOATED
+Problem:
+- The settings page currently has too much unnecessary stuff
+- It still contains old Pray Screen style copy and extra rows I do not need
+- I uploaded screenshots showing the current settings page and the native “Choose Activities” picker
+
+Fix:
+- Simplify the settings page
+- Use the uploaded screenshots as reference for what currently exists and what the native picker looks like
+- Keep only the settings needed for this product
+
+5. REMOVE UNLOCK WINDOW FEATURE COMPLETELY
+Problem:
+- I do not want “unlock for 5/10/15/30 minutes”
+- I only want selected apps to be locked at scheduled times
+
+Fix:
+- Remove unlock window UI
+- Remove unlock window state
+- Remove unlock window helper functions
+- Remove unlock window settings rows
+- Remove unlock window copy
+- Remove timers/countdowns related to temporary unlock windows
+- Remove any session logic tied to temporary unlocks
+- Replace with scheduled locking only
+
+6. CLEAN UP USER-FACING COPY
+Problem:
+- Some strings are wrong, old, or weird
+- Example: “Pray Screen” still appears
+- There are malformed strings like escaped punctuation or odd separators
+
+Fix:
+- Replace all old “Pray Screen” references with the correct app/product naming used in the repo
+- Fix malformed strings like “begin \u00b7”
+- Normalize visible settings copy so it feels clean and product-ready
+- Keep the copy simple and minimal
+
+==================================================
+SETTINGS PAGE I WANT
+==================================================
+
+Keep the settings page minimal.
+
+Only keep these sections if they are needed:
+
+1. Screen Time Access
+- status row
+- request / reconnect button if needed
+
+2. Apps to Lock
+- opens the native FamilyActivityPicker
+- shows whether apps/categories have been selected
+
+3. Lock Schedule
+- choose when locking is active
+- start time / end time
+- optionally days of week if the app already supports or can support it cleanly
+- keep it minimal and practical
+
+4. Support
+- opens contact email / support email
+
+5. Privacy Policy
+- opens the correct privacy policy URL
+
+6. Version
+- keep only if already present and useful
+
+Remove anything not needed, especially:
+- user status
+- user ID
+- share rows unless already required
+- extra marketing/legal clutter
+- old Pray Screen wording
+- unlock-window-related controls
+- anything that does not directly help with Screen Time setup or basic support/legal access
+
+==================================================
+DESIGN / UX DIRECTION FOR SETTINGS
+==================================================
+
+Use the uploaded settings screenshot as an example of the current page that needs simplification.
+Use the uploaded native activity picker screenshot as an example of the Apple flow I want to keep using for app/category selection.
+
+I want:
+- fewer rows
+- cleaner information hierarchy
+- no clutter
+- no old branding leftovers
+- no unnecessary status boxes
+- a more focused settings experience
+
+Do not redesign the full visual system.
+Just simplify the settings page structure while preserving the app’s existing style.
+
+==================================================
+WHAT TO INSPECT
+==================================================
+
+Inspect all likely places where these issues may live, including:
+- App config files
+- app.json / app.config.*
+- Expo config
+- package files
+- iOS native code
+- FamilyControls / ManagedSettings / DeviceActivity code
+- Screen Time bridge/native modules
+- App extensions if present
+- Settings screen
+- Onboarding/setup flow
+- Constants/config files
+- Legal/support link definitions
+- Copy/strings/constants
+- App state/context files
+- Any unlock-window logic
+- Any schedule or lock state logic
+
+==================================================
+IMPLEMENTATION RULES
+==================================================
+
+- Keep changes minimal and surgical
+- Do not refactor unrelated code
+- Do not redesign unrelated screens
+- Do not add features beyond what is required
+- Do not keep temporary unlock behavior
+- Do not fake Screen Time behavior
+- Use native iOS Screen Time APIs properly
+- Keep TypeScript typed and clean
+- No `any` unless absolutely unavoidable
+
+==================================================
+RESPONSE FORMAT
+==================================================
+
+Respond in this exact order:
+
+1. Repo inspection summary
+- why Screen Time authorization is not being requested
+- where old Pray Screen wording still exists
+- where the wrong support email is coming from
+- where the wrong privacy URL is coming from
+- where unlock-window logic currently lives
+- what parts of settings can be removed safely
+
+2. Exact implementation plan
+- smallest set of files to change
+- what native pieces need to be added or fixed
+- what settings rows/logic will be removed
+- what scheduled-lock model will replace unlock windows
+
+3. Code changes
+- make the changes directly
+
+4. Changed files list
+- every changed file
+- one-line reason for each
+
+5. Manual QA checklist
+Must include:
+- Screen Time authorization prompt appears on iPhone
+- authorization status updates correctly
+- FamilyActivityPicker opens correctly
+- selected apps/categories save correctly
+- scheduled lock times are applied
+- unlock-window feature no longer appears anywhere
+- support email is correct everywhere
+- privacy policy opens the correct URL
+- old Pray Screen wording is gone
+- malformed strings are gone
+- simplified Settings page still works
+
+6. Limitations
+- clearly state anything still depending on native iOS setup, entitlements, app extensions, a dev build, or Xcode configuration

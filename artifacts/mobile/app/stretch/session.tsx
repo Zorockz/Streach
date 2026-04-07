@@ -200,11 +200,7 @@ export default function StretchSessionScreen() {
     targetApp?: string;
     targetAppId?: string;
   }>();
-  const { settings, recordSession, unlockAppForWindow } = useApp();
-
-  const unlockUntilLabel = settings.reminderEnabled && settings.selectedReminderTimes.length > 0
-    ? "until your next reminder"
-    : "for the rest of the day";
+  const { settings, recordSession } = useApp();
 
   const stretch = stretchId
     ? STRETCHES.find(s => s.id === stretchId)
@@ -280,11 +276,6 @@ export default function StretchSessionScreen() {
       durationSeconds: elapsed,
       targetApp,
     });
-
-    // If this session was for a specific gated app, unlock it
-    if (targetAppId && targetApp) {
-      await unlockAppForWindow(targetAppId, targetApp, stretch.id, sessionId);
-    }
 
     router.back();
   };
@@ -453,18 +444,6 @@ export default function StretchSessionScreen() {
             entering={FadeInDown.duration(450)}
             style={{ gap: 12, width: "100%" }}
           >
-            {targetApp && (
-              <View style={styles.unlockBadge}>
-                <Ionicons
-                  name="lock-open-outline"
-                  size={14}
-                  color={Colors.accent}
-                />
-                <Text style={styles.unlockText}>
-                  {targetApp} unlocked {unlockUntilLabel}
-                </Text>
-              </View>
-            )}
             <Pressable style={styles.startBtn} onPress={handleComplete}>
               <Ionicons name="checkmark" size={20} color={Colors.white} />
               <Text style={styles.startBtnText}>Log session &amp; finish</Text>
@@ -631,16 +610,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "DM_Sans_400Regular",
     color: Colors.textMuted,
-  },
-  unlockBadge: {
-    flexDirection: "row", alignItems: "center", gap: 7,
-    backgroundColor: Colors.accentMuted,
-    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9,
-    alignSelf: "center",
-  },
-  unlockText: {
-    fontSize: 13,
-    fontFamily: "DM_Sans_500Medium",
-    color: Colors.accent,
   },
 });

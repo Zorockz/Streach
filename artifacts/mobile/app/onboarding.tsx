@@ -38,7 +38,7 @@ import {
   syncStretchReminderNotifications,
 } from "@/services/notifications";
 import type { ReminderTime as ServiceReminderTime } from "@/services/notifications";
-import { requestFamilyControlsAuth } from "@/services/familyControls";
+import { requestFamilyControlsAuth, isNativeAvailable } from "@/services/familyControls";
 
 const TOTAL_STEPS = 16;
 
@@ -821,20 +821,20 @@ function HonorSystemStep({ onNext }: { onNext: () => void }) {
       </View>
       <View style={hs.textArea}>
         <Reanimated.Text entering={FadeInDown.duration(500)} style={hs.headline}>
-          This runs on trust.
+          Real Screen Time blocking.
         </Reanimated.Text>
         <Reanimated.Text entering={FadeInDown.duration(500).delay(100)} style={hs.body}>
-          {"We don't actually block your apps. You do \u2014 by choosing to stretch before you scroll.\n\nNo surveillance. No screen time locks. Just you keeping your word to yourself."}
+          {"Streach Gate uses Apple Screen Time to actually block your selected apps during your chosen schedule.\n\nWhen it\u2019s time to lock, your apps are blocked. Stretch to clear the schedule and get access back."}
         </Reanimated.Text>
       </View>
       <View style={[hs.footer, { paddingBottom: Math.max(bottom + 16, 36) }]}>
         <Reanimated.View style={btnStyle}>
           <Pressable style={hs.commitBtn} onPress={handleCommit}>
-            <Ionicons name="hand-left-outline" size={20} color={Colors.white} style={{ marginRight: 10 }} />
-            <Text style={hs.commitText}>I commit</Text>
+            <Ionicons name="shield-checkmark-outline" size={20} color={Colors.white} style={{ marginRight: 10 }} />
+            <Text style={hs.commitText}>Got it</Text>
           </Pressable>
         </Reanimated.View>
-        <Text style={hs.sub}>{"You're building a new habit, not breaking old locks."}</Text>
+        <Text style={hs.sub}>Screen Time permission is required in the next step.</Text>
       </View>
     </View>
   );
@@ -1055,14 +1055,19 @@ function PermissionsStep({
       if (notifOn && Platform.OS !== "web") {
         await requestReminderPermissions();
       }
+      if (!isNativeAvailable()) {
+        // Native module not linked — dev build required. Skip gracefully.
+        onNext();
+        return;
+      }
       const status = await requestFamilyControlsAuth();
       if (status === "authorized") {
         onNext();
       } else {
-        setError("Authorization failed. Please try again.");
+        setError("Screen Time access was not granted. You can grant it later in Settings.");
       }
     } catch {
-      setError("Something went wrong. You can skip for now.");
+      setError("Something went wrong. You can grant access later in Settings.");
     } finally {
       setLoading(false);
     }
@@ -1088,7 +1093,7 @@ function PermissionsStep({
               </View>
             </View>
             <Text style={sh.permDesc}>
-              Lets Streach Gate detect when you open gated apps. Honor-system mode works without it.
+              Allows Streach Gate to block your selected apps during your scheduled lock times.
             </Text>
           </View>
         </Reanimated.View>
@@ -1130,7 +1135,7 @@ function PermissionsStep({
           )}
         </Pressable>
         <Pressable style={sh.skipLink} onPress={onNext}>
-          <Text style={sh.skipLinkText}>{"Skip for now \u2014 I'll use honor-system mode"}</Text>
+          <Text style={sh.skipLinkText}>Grant later in Settings</Text>
         </Pressable>
       </View>
     </View>
@@ -1454,7 +1459,6 @@ export default function OnboardingScreen() {
       selectedScrollTimes: mappedScrollTimes,
       selectedReminderTimes: mappedReminderTimes,
       notificationPermissionStatus: permissionStatus,
-      honorSystemMode: true,
       hasCompletedOnboarding: true,
     });
 

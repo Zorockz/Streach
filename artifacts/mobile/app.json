@@ -21,7 +21,8 @@
         "com.apple.developer.family-controls": true
       },
       "infoPlist": {
-        "NSUserNotificationUsageDescription": "Streach Gate uses notifications to remind you to stretch and protect your daily streak."
+        "NSUserNotificationUsageDescription": "Streach Gate uses notifications to remind you to stretch and protect your daily streak.",
+        "NSFamilyControlsUsageDescription": "Streach Gate uses Screen Time to block selected apps on schedule so you stretch before you scroll."
       }
     },
     "web": {

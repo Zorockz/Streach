@@ -29,6 +29,7 @@ import type { ReminderTime, ReminderHourConfig } from "@/services/notifications"
 import {
   requestFamilyControlsAuth,
   getFamilyControlsStatus,
+  isNativeAvailable,
 } from "@/services/familyControls";
 import type { FamilyControlsStatus } from "@/services/familyControls";
 
@@ -247,7 +248,7 @@ function AppSelectionModal({
       <Pressable style={m.overlay} onPress={onClose} />
       <View style={[m.sheet, { maxHeight: "75%" }]}>
         <View style={m.handle} />
-        <Text style={m.title}>Gated Apps</Text>
+        <Text style={m.title}>Apps to Lock</Text>
         <ScrollView showsVerticalScrollIndicator={false}>
           {DISTRACTING_APPS.map((app, i) => {
             const on = selected.includes(app.id);
@@ -440,16 +441,6 @@ export default function SettingsScreen() {
     await syncNotifs({ selectedReminderTimes: updated });
   };
 
-  const openScreenTime = async () => {
-    if (Platform.OS === "ios") {
-      const url = "App-Prefs:SCREEN_TIME";
-      const supported = await Linking.canOpenURL(url).catch(() => false);
-      await Linking.openURL(supported ? url : "App-Prefs:").catch(() => Linking.openSettings());
-    } else {
-      await Linking.openSettings();
-    }
-  };
-
   const handleReset = () => {
     Alert.alert(
       "Reset All Data",
@@ -466,15 +457,21 @@ export default function SettingsScreen() {
 
   // Derived values for display
   const appsLabel = settings.lockedApps.length === 0
-    ? "None" : `${settings.lockedApps.length} app${settings.lockedApps.length > 1 ? "s" : ""}`;
+    ? "None selected" : `${settings.lockedApps.length} app${settings.lockedApps.length > 1 ? "s" : ""}`;
   const focusLabel = settings.focusBodyAreas.length === 0
     ? "All areas" : settings.focusBodyAreas.length === 1
     ? settings.focusBodyAreas[0] : `${settings.focusBodyAreas.length} areas`;
   const durationLabel = `${settings.preferredDuration}s`;
-  const fcLabel = fcStatus === "authorized" ? "Active"
-    : fcStatus === "denied" ? "Denied"
-    : Platform.OS === "ios" && !NativeModules.FamilyControlsModule ? "Dev build required"
+
+  const fcLabel = fcStatus === "authorized"
+    ? "Active"
+    : fcStatus === "denied"
+    ? "Denied"
+    : !isNativeAvailable()
+    ? "Dev build required"
     : "Not authorized";
+
+  const canRequestFC = fcStatus !== "authorized" && !fcLoading && isNativeAvailable();
 
   return (
     <SafeAreaView style={s.container} edges={["top"]}>
@@ -488,33 +485,37 @@ export default function SettingsScreen() {
           <Text style={s.title}>Settings</Text>
         </View>
 
-        {/* ── Mindful Gates ────────────────────────────────────── */}
-        <Section title="MINDFUL GATES">
-          <ToggleRow
-            icon="lock-closed-outline"
-            iconBg={settings.gatesActive ? Colors.primaryMuted : Colors.bgSurface}
-            iconColor={settings.gatesActive ? Colors.primary : Colors.textMuted}
-            label="Gates active"
-            value={settings.gatesActive}
-            onChange={v => updateSettings({ gatesActive: v })}
-            divider
-          />
+        {/* ── Screen Time Access ────────────────────────────────── */}
+        <Section title="SCREEN TIME">
           <NavRow
-            icon="apps-outline"
+            icon="shield-checkmark-outline"
+            iconBg={fcStatus === "authorized" ? Colors.primaryMuted : "rgba(201,106,50,0.1)"}
+            iconColor={fcStatus === "authorized" ? Colors.primary : Colors.accent}
+            label="Apple Screen Time"
+            value={fcLabel}
+            onPress={canRequestFC ? handleRequestFC : undefined}
+            divider={false}
+          />
+        </Section>
+
+        {/* ── Apps to Lock ──────────────────────────────────────── */}
+        <Section title="APPS TO LOCK">
+          <NavRow
+            icon="lock-closed-outline"
             iconBg="rgba(58,122,92,0.1)"
-            label="Gated apps"
+            label="Apps"
             value={appsLabel}
             onPress={() => setShowApps(true)}
             divider={false}
           />
         </Section>
 
-        {/* ── Reminders ────────────────────────────────────────── */}
-        <Section title="REMINDERS">
+        {/* ── Lock Schedule (reminders) ─────────────────────────── */}
+        <Section title="LOCK SCHEDULE">
           <ToggleRow
             icon="notifications-outline"
             iconBg="rgba(58,122,92,0.1)"
-            label="Daily reminders"
+            label="Stretch reminders"
             sub={settings.reminderEnabled && permStatus === "denied" ? "Permission denied — tap to open Settings" : undefined}
             value={settings.reminderEnabled}
             onChange={toggleReminderMaster}
@@ -549,7 +550,7 @@ export default function SettingsScreen() {
           })}
         </Section>
 
-        {/* ── Stretch settings ─────────────────────────────────── */}
+        {/* ── Stretch Settings ──────────────────────────────────── */}
         <Section title="STRETCH SETTINGS">
           <NavRow
             icon="body-outline"
@@ -577,7 +578,7 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        {/* ── Notifications ────────────────────────────────────── */}
+        {/* ── Notifications ─────────────────────────────────────── */}
         <Section title="NOTIFICATIONS">
           <ToggleRow
             icon="flame-outline"
@@ -587,33 +588,8 @@ export default function SettingsScreen() {
             sub="Alert if you haven't stretched by evening"
             value={settings.streakNotifEnabled}
             onChange={async v => { await updateSettings({ streakNotifEnabled: v }); await syncNotifs({ streakNotifEnabled: v }); }}
-            divider={false}
-          />
-        </Section>
-
-        {/* ── Screen Time ───────────────────────────────────────── */}
-        <Section title="SCREEN TIME">
-          <NavRow
-            icon="shield-checkmark-outline"
-            iconBg={fcStatus === "authorized" ? Colors.primaryMuted : "rgba(201,106,50,0.1)"}
-            iconColor={fcStatus === "authorized" ? Colors.primary : Colors.accent}
-            label="Apple Screen Time Access"
-            value={fcLabel}
-            onPress={fcStatus !== "authorized" && !fcLoading && !!NativeModules.FamilyControlsModule ? handleRequestFC : undefined}
             divider
           />
-          <NavRow
-            icon="time-outline"
-            iconBg="rgba(88,86,214,0.12)"
-            iconColor="#5856D6"
-            label="Open iOS Screen Time"
-            onPress={openScreenTime}
-            divider={false}
-          />
-        </Section>
-
-        {/* ── Preferences ──────────────────────────────────────── */}
-        <Section title="PREFERENCES">
           <ToggleRow
             icon="phone-portrait-outline"
             iconBg="rgba(88,86,214,0.12)"
@@ -625,7 +601,7 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        {/* ── Support ──────────────────────────────────────────── */}
+        {/* ── Support ───────────────────────────────────────────── */}
         <Section title="SUPPORT">
           <NavRow
             icon="document-text-outline"
@@ -638,7 +614,6 @@ export default function SettingsScreen() {
             icon="mail-outline"
             iconBg={Colors.primaryMuted}
             label="Contact Support"
-            value="simodigitalagency@gmail.com"
             onPress={() => Linking.openURL("mailto:simodigitalagency@gmail.com")}
             divider={false}
           />
@@ -650,7 +625,7 @@ export default function SettingsScreen() {
           <Text style={s.infoValue}>1.0.0</Text>
         </View>
 
-        {/* ── Danger Zone ──────────────────────────────────────── */}
+        {/* ── Danger Zone ───────────────────────────────────────── */}
         <Section title="">
           <NavRow
             icon="trash-outline"

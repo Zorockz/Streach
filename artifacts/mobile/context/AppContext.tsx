@@ -19,15 +19,6 @@ export interface StretchSession {
   targetApp?: string;
 }
 
-export interface UnlockRecord {
-  appId: string;
-  appName: string;
-  unlockedAt: string;
-  expiresAt: string;
-  stretchId: string;
-  sourceSessionId?: string;
-}
-
 export interface AppSettings {
   hasCompletedOnboarding: boolean;
   lockedApps: string[];
@@ -36,29 +27,21 @@ export interface AppSettings {
   dailyGoal: number;
   hapticEnabled: boolean;
   reminderEnabled: boolean;
-  // Scroll / reminder time prefs
   selectedScrollTimes: ScrollTime[];
   selectedReminderTimes: ReminderTime[];
   reminderHours: Partial<Record<ReminderTime, ReminderHourConfig>>;
-  // Notification permission
   notificationPermissionStatus: 'undetermined' | 'granted' | 'denied';
-  // Streak protection notif
   streakNotifEnabled: boolean;
-  streakNotifHour: number;     // hour (24h) to fire the streak reminder (default 21)
-  // Gate system master toggle
+  streakNotifHour: number;
   gatesActive: boolean;
-  // Family Controls
   familyControlsAuthorized: boolean;
-  // Misc
-  honorSystemMode: boolean;
-  sessionMinSeconds: number;    // minimum seconds for a session to count
+  sessionMinSeconds: number;
   lastReminderSyncAt?: string;
 }
 
 export interface AppContextValue {
   settings: AppSettings;
   sessions: StretchSession[];
-  activeUnlocks: Record<string, UnlockRecord>;
   todayCount: number;
   currentStreak: number;
   totalSessions: number;
@@ -67,12 +50,6 @@ export interface AppContextValue {
   updateSettings: (updates: Partial<AppSettings>) => Promise<void>;
   recordSession: (session: Omit<StretchSession, 'id' | 'completedAt'>) => Promise<void>;
   clearAllData: () => Promise<void>;
-  // Unlock helpers
-  isAppUnlocked: (appId: string) => boolean;
-  getUnlockRemainingMs: (appId: string) => number;
-  unlockAppForWindow: (appId: string, appName: string, stretchId: string, sourceSessionId?: string) => Promise<void>;
-  cleanupExpiredUnlocks: () => Promise<void>;
-  // Lifecycle
   onForeground: () => Promise<void>;
 }
 
@@ -92,42 +69,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   streakNotifHour: 21,
   gatesActive: true,
   familyControlsAuthorized: false,
-  honorSystemMode: true,
   sessionMinSeconds: 10,
 };
-
-/**
- * Returns the next time an app should re-lock based on the user's scheduled
- * reminder times. If no reminders are configured, returns midnight tonight.
- */
-function getNextReminderExpiry(
-  selectedReminderTimes: ReminderTime[],
-  reminderHours: Partial<Record<ReminderTime, ReminderHourConfig>>
-): Date {
-  const now = new Date();
-  const nowMs = now.getTime();
-
-  const futureMs: number[] = selectedReminderTimes.map(rt => {
-    const cfg = reminderHours[rt] ?? DEFAULT_REMINDER_HOURS[rt];
-    const t = new Date(now);
-    t.setHours(cfg.hour, cfg.minute, 0, 0);
-    return t.getTime();
-  }).filter(t => t > nowMs).sort((a, b) => a - b);
-
-  if (futureMs.length > 0) {
-    return new Date(futureMs[0]);
-  }
-
-  // No more reminders today — stay unlocked until midnight
-  const midnight = new Date(now);
-  midnight.setHours(23, 59, 59, 0);
-  return midnight;
-}
 
 const STORAGE_KEYS = {
   SETTINGS: '@stretchgate/settings',
   SESSIONS: '@stretchgate/sessions',
-  UNLOCKS: '@stretchgate/unlocks',
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -160,32 +107,17 @@ function calculateStreak(sessions: StretchSession[]): number {
   return streak;
 }
 
-function removeExpiredUnlocks(
-  unlocks: Record<string, UnlockRecord>
-): Record<string, UnlockRecord> {
-  const now = Date.now();
-  const result: Record<string, UnlockRecord> = {};
-  for (const [id, record] of Object.entries(unlocks)) {
-    if (new Date(record.expiresAt).getTime() > now) {
-      result[id] = record;
-    }
-  }
-  return result;
-}
-
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [sessions, setSessions] = useState<StretchSession[]>([]);
-  const [activeUnlocks, setActiveUnlocks] = useState<Record<string, UnlockRecord>>({});
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [settingsData, sessionsData, unlocksData] = await Promise.all([
+        const [settingsData, sessionsData] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.SETTINGS),
           AsyncStorage.getItem(STORAGE_KEYS.SESSIONS),
-          AsyncStorage.getItem(STORAGE_KEYS.UNLOCKS),
         ]);
 
         if (settingsData) {
@@ -193,16 +125,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         if (sessionsData) setSessions(JSON.parse(sessionsData));
 
-        if (unlocksData) {
-          const parsed: Record<string, UnlockRecord> = JSON.parse(unlocksData);
-          const cleaned = removeExpiredUnlocks(parsed);
-          setActiveUnlocks(cleaned);
-          if (Object.keys(cleaned).length !== Object.keys(parsed).length) {
-            await AsyncStorage.setItem(STORAGE_KEYS.UNLOCKS, JSON.stringify(cleaned));
-            // Cancel any expiry alerts for records that no longer exist
-            await cancelAllUnlockExpiryAlerts();
-          }
-        }
+        // Clean up any unlock expiry alerts left over from previous app versions
+        await cancelAllUnlockExpiryAlerts();
       } catch (e) {
         console.error('Failed to load app data', e);
       } finally {
@@ -243,85 +167,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.multiRemove([
       STORAGE_KEYS.SETTINGS,
       STORAGE_KEYS.SESSIONS,
-      STORAGE_KEYS.UNLOCKS,
     ]);
-    await cancelAllUnlockExpiryAlerts();
     setSettings(DEFAULT_SETTINGS);
     setSessions([]);
-    setActiveUnlocks({});
   }, []);
 
-  // ── Unlock helpers ────────────────────────────────────────────────
-
-  const isAppUnlocked = useCallback(
-    (appId: string): boolean => {
-      const record = activeUnlocks[appId];
-      if (!record) return false;
-      return new Date(record.expiresAt).getTime() > Date.now();
-    },
-    [activeUnlocks]
-  );
-
-  const getUnlockRemainingMs = useCallback(
-    (appId: string): number => {
-      const record = activeUnlocks[appId];
-      if (!record) return 0;
-      return Math.max(0, new Date(record.expiresAt).getTime() - Date.now());
-    },
-    [activeUnlocks]
-  );
-
-  const unlockAppForWindow = useCallback(
-    async (appId: string, appName: string, stretchId: string, sourceSessionId?: string) => {
-      const now = new Date();
-      // Expires at the next scheduled reminder, or midnight if none remain today
-      const expiresAt = getNextReminderExpiry(
-        settings.reminderEnabled ? settings.selectedReminderTimes : [],
-        settings.reminderHours ?? {}
-      );
-      const record: UnlockRecord = {
-        appId,
-        appName,
-        unlockedAt: now.toISOString(),
-        expiresAt: expiresAt.toISOString(),
-        stretchId,
-        sourceSessionId,
-      };
-      setActiveUnlocks(prev => {
-        const updated = { ...prev, [appId]: record };
-        AsyncStorage.setItem(STORAGE_KEYS.UNLOCKS, JSON.stringify(updated));
-        return updated;
-      });
-    },
-    [settings.reminderEnabled, settings.selectedReminderTimes, settings.reminderHours]
-  );
-
-  const cleanupExpiredUnlocks = useCallback(async () => {
-    setActiveUnlocks(prev => {
-      const cleaned = removeExpiredUnlocks(prev);
-      if (Object.keys(cleaned).length !== Object.keys(prev).length) {
-        AsyncStorage.setItem(STORAGE_KEYS.UNLOCKS, JSON.stringify(cleaned));
-        // Cancel expiry alerts for apps that are now past their window
-        cancelAllUnlockExpiryAlerts();
-        return cleaned;
-      }
-      return prev;
-    });
-  }, []);
-
-  // Called by _layout when app returns to foreground
   const onForeground = useCallback(async () => {
-    await cleanupExpiredUnlocks();
-  }, [cleanupExpiredUnlocks]);
-
-  // ── Computed values ───────────────────────────────────────────────
+    // Reserved for future foreground tasks (e.g. re-sync Screen Time schedule)
+  }, []);
 
   const today = getTodayISO();
   const todayCount = sessions.filter(s => s.completedAt.startsWith(today)).length;
   const currentStreak = calculateStreak(sessions);
   const totalSessions = sessions.length;
 
-  // Streak is at risk if: has streak, no stretch today, and it's past 5pm
   const isStreakAtRisk = useMemo(
     () => currentStreak > 0 && todayCount === 0 && new Date().getHours() >= 17,
     [currentStreak, todayCount]
@@ -331,7 +190,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider value={{
       settings,
       sessions,
-      activeUnlocks,
       todayCount,
       currentStreak,
       totalSessions,
@@ -340,10 +198,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       updateSettings,
       recordSession,
       clearAllData,
-      isAppUnlocked,
-      getUnlockRemainingMs,
-      unlockAppForWindow,
-      cleanupExpiredUnlocks,
       onForeground,
     }}>
       {children}
