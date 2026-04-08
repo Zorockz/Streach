@@ -276,3 +276,56 @@ export async function syncStretchReminderNotifications(
     await cancelStreakProtectionNotification();
   }
 }
+
+// ── Convenience adapters used by AppContext ─────────────────────────────────
+
+/**
+ * Schedule a single daily reminder at the specified time.
+ * Used when the user changes reminderEnabled or reminderTime in settings.
+ */
+export async function scheduleDailyReminder(
+  time: { hour: number; minute: number },
+  streakCount: number = 0
+): Promise<void> {
+  if (Platform.OS === 'web') return;
+  const Notifications = getNotif();
+  if (!Notifications) return;
+  const body = streakCount > 0
+    ? `Day ${streakCount + 1} — time for your stretch! 🌿`
+    : 'Time for your daily stretch! 🌿';
+  await Notifications.scheduleNotificationAsync({
+    content: { title: 'Streach Gate', body, sound: true },
+    trigger: { type: 'calendar' as any, hour: time.hour, minute: time.minute, repeats: true },
+  });
+}
+
+/**
+ * Re-schedule a streak protection alert.
+ * Alias of scheduleStreakProtectionNotification for AppContext use.
+ */
+export async function scheduleStreakAlert(streakCount: number): Promise<void> {
+  if (streakCount <= 0) return;
+  await scheduleStreakProtectionNotification(streakCount, 21);
+}
+
+/**
+ * Cancel ALL scheduled notifications (stretch + streak).
+ */
+export async function cancelAllNotifications(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  const Notifications = getNotif();
+  if (!Notifications) return;
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  } catch { /* non-fatal */ }
+}
+
+/**
+ * Called by AppContext after a session completes.
+ * Reschedules streak notifications with the updated streak count.
+ */
+export async function handleSessionCompleted(newStreakCount: number): Promise<void> {
+  if (newStreakCount > 0) {
+    await scheduleStreakProtectionNotification(newStreakCount, 21).catch(() => {});
+  }
+}

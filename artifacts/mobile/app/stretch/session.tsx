@@ -267,9 +267,16 @@ export default function StretchSessionScreen() {
   const handleComplete = async () => {
     if (!stretch) return;
 
-    const sessionId = Date.now().toString();
+    // Lift OS-level restriction if this was a gated-app session (15 min window)
+    if (targetApp) {
+      try {
+        const { StretchGateNative } = await import('@/native/StretchGateNative');
+        StretchGateNative.liftRestrictions(15);
+      } catch (e) {
+        console.warn('[SGNative] liftRestrictions error:', e);
+      }
+    }
 
-    // Record the session first
     await recordSession({
       stretchId: stretch.id,
       stretchName: stretch.name,

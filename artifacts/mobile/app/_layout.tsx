@@ -13,6 +13,7 @@ import {
   Animated,
   AppState,
   AppStateStatus,
+  Linking,
   Platform,
   StyleSheet,
   View,
@@ -64,6 +65,37 @@ function RootNavigator() {
       triggerPaywall("Superwall Stretch APi", () => setPaywallChecked(true));
     });
   }, [isLoading, settings.hasCompletedOnboarding]);
+
+  // ── Deep link handler ────────────────────────────────────────────────
+  const handleDeepLink = (url: string) => {
+    if (!url) return;
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname === 'stretch' && parsed.pathname.includes('session')) {
+        const targetApp = parsed.searchParams.get('targetApp');
+        const stretchId = parsed.searchParams.get('stretchId');
+        const params: Record<string, string> = {};
+        if (targetApp) params.targetApp = targetApp;
+        if (stretchId) params.stretchId = stretchId;
+        router.push({ pathname: '/stretch/session', params });
+      }
+    } catch {
+      if (url.includes('stretch/session')) {
+        const targetApp = url.split('targetApp=')[1]?.split('&')[0];
+        const stretchId = url.split('stretchId=')[1]?.split('&')[0];
+        const params: Record<string, string> = {};
+        if (targetApp) params.targetApp = decodeURIComponent(targetApp);
+        if (stretchId) params.stretchId = decodeURIComponent(stretchId);
+        router.push({ pathname: '/stretch/session', params });
+      }
+    }
+  };
+
+  useEffect(() => {
+    Linking.getInitialURL().then((url) => { if (url) handleDeepLink(url); });
+    const sub = Linking.addEventListener('url', ({ url }) => handleDeepLink(url));
+    return () => sub.remove();
+  }, []);
 
   // ── AppState listener: foreground/background ───────────────────────
   useEffect(() => {

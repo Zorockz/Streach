@@ -6,6 +6,10 @@ import {
   ReminderHourConfig,
   cancelAllUnlockExpiryAlerts,
   DEFAULT_REMINDER_HOURS,
+  scheduleDailyReminder,
+  scheduleStreakAlert,
+  cancelAllNotifications,
+  handleSessionCompleted,
 } from '@/services/notifications';
 
 export type ScrollTime = 'morning' | 'midday' | 'evening' | 'night';
@@ -35,6 +39,8 @@ export interface AppSettings {
   streakNotifHour: number;
   gatesActive: boolean;
   familyControlsAuthorized: boolean;
+  isLockActive: boolean;
+  reminderTime: { hour: number; minute: number };
   sessionMinSeconds: number;
   lastReminderSyncAt?: string;
 }
@@ -69,6 +75,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   streakNotifHour: 21,
   gatesActive: true,
   familyControlsAuthorized: false,
+  isLockActive: false,
+  reminderTime: { hour: 9, minute: 0 },
   sessionMinSeconds: 10,
 };
 
@@ -138,11 +146,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updateSettings = useCallback(async (updates: Partial<AppSettings>) => {
     setSettings(prev => {
-      const newSettings = { ...prev, ...updates };
-      AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(newSettings));
-      return newSettings;
+      const next = { ...prev, ...updates };
+      AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(next));
+      if ('reminderEnabled' in updates || 'reminderTime' in updates) {
+        if (next.reminderEnabled) {
+          const time = next.reminderTime ?? { hour: 9, minute: 0 };
+          const streak = calculateStreak(sessions);
+          scheduleDailyReminder(time, streak).catch(() => {});
+          scheduleStreakAlert(streak).catch(() => {});
+        } else {
+          cancelAllNotifications().catch(() => {});
+        }
+      }
+      return next;
     });
-  }, []);
+  }, [sessions]);
 
   const recordSession = useCallback(async (session: Omit<StretchSession, 'id' | 'completedAt'>) => {
     const now = new Date().toISOString();
@@ -161,7 +179,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       AsyncStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(newSessions));
       return newSessions;
     });
-  }, []);
+    try {
+      const streak = calculateStreak(sessions);
+      await handleSessionCompleted(streak);
+    } catch (e) {
+      console.warn('[SGNotif] reschedule failed:', e);
+    }
+  }, [sessions]);
 
   const clearAllData = useCallback(async () => {
     await AsyncStorage.multiRemove([

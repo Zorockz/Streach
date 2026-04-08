@@ -38,7 +38,8 @@ import {
   syncStretchReminderNotifications,
 } from "@/services/notifications";
 import type { ReminderTime as ServiceReminderTime } from "@/services/notifications";
-import { requestFamilyControlsAuth, isNativeAvailable } from "@/services/familyControls";
+import { isNativeAvailable } from "@/services/familyControls";
+import { StretchGateNative } from "@/native/StretchGateNative";
 
 const TOTAL_STEPS = 16;
 
@@ -1060,8 +1061,8 @@ function PermissionsStep({
         onNext();
         return;
       }
-      const status = await requestFamilyControlsAuth();
-      if (status === "authorized") {
+      const granted = await StretchGateNative.requestAuthorization();
+      if (granted) {
         onNext();
       } else {
         setError("Screen Time access was not granted. You can grant it later in Settings.");
@@ -1450,6 +1451,17 @@ export default function OnboardingScreen() {
       permissionStatus = await requestReminderPermissions();
     }
 
+    // Persist Screen Time authorization status from the native module
+    let fcAuthorized = false;
+    let isLockActive = false;
+    try {
+      if (isNativeAvailable()) {
+        const authStatus = await StretchGateNative.getAuthorizationStatus();
+        fcAuthorized = authStatus === 'authorized';
+        isLockActive = fcAuthorized;
+      }
+    } catch { /* non-fatal */ }
+
     await updateSettings({
       focusBodyAreas: selectedAreas,
       preferredDuration: selectedDuration,
@@ -1459,6 +1471,9 @@ export default function OnboardingScreen() {
       selectedScrollTimes: mappedScrollTimes,
       selectedReminderTimes: mappedReminderTimes,
       notificationPermissionStatus: permissionStatus,
+      familyControlsAuthorized: fcAuthorized,
+      isLockActive,
+      gatesActive: fcAuthorized,
       hasCompletedOnboarding: true,
     });
 

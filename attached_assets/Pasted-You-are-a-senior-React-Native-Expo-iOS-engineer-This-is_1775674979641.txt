@@ -1,0 +1,1033 @@
+You are a senior React Native / Expo / iOS engineer. This is a 
+single complete prompt that does everything in order:
+1. Fix all TypeScript errors
+2. Create all missing config files  
+3. Create the native bridge stub
+4. Create the notifications service
+5. Update all JS files to wire everything together
+6. Run expo prebuild to generate the /ios folder
+7. Write all Swift native files into the generated /ios folder
+8. Commit and push everything to GitHub
+
+The app is at: artifacts/mobile/
+Do every step in order. Do not skip any step.
+After each major step, confirm what you did before moving on.
+
+---
+
+## STEP 1 — Install dependencies
+
+cd artifacts/mobile
+pnpm install
+
+Then verify node_modules exists and expo-notifications is installed:
+ls node_modules/expo-notifications 2>/dev/null && echo "OK" || echo "MISSING"
+
+If expo-notifications is missing run:
+npx expo install expo-notifications
+
+---
+
+## STEP 2 — Fix font export names in app/_layout.tsx
+
+FILE: artifacts/mobile/app/_layout.tsx
+
+The @expo-google-fonts/dm-sans package exports DMSans_* names 
+not DM_Sans_* names. This is causing 4 TypeScript errors.
+
+Replace the entire font import block at the top:
+
+FIND AND REPLACE this exact block:
+import {
+  DM_Sans_400Regular,
+  DM_Sans_500Medium,
+  DM_Sans_600SemiBold,
+  DM_Sans_700Bold,
+  useFonts,
+} from "@expo-google-fonts/dm-sans";
+
+WITH:
+import {
+  DMSans_400Regular,
+  DMSans_500Medium,
+  DMSans_600SemiBold,
+  DMSans_700Bold,
+  useFonts,
+} from "@expo-google-fonts/dm-sans";
+
+Then find the useFonts call and replace:
+  const [fontsLoaded, fontError] = useFonts({
+    DM_Sans_400Regular,
+    DM_Sans_500Medium,
+    DM_Sans_600SemiBold,
+    DM_Sans_700Bold,
+  });
+
+WITH:
+  const [fontsLoaded, fontError] = useFonts({
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_600SemiBold,
+    DMSans_700Bold,
+  });
+
+IMPORTANT: Every fontFamily reference across ALL files uses 
+strings like "DM_Sans_700Bold" — those string values in 
+StyleSheets do NOT need to change. Only the import variable 
+names change. The font is registered under whatever key you 
+pass to useFonts. So also update the useFonts object to use 
+string keys that match the existing StyleSheet references:
+
+  const [fontsLoaded, fontError] = useFonts({
+    "DM_Sans_400Regular": DMSans_400Regular,
+    "DM_Sans_500Medium": DMSans_500Medium,
+    "DM_Sans_600SemiBold": DMSans_600SemiBold,
+    "DM_Sans_700Bold": DMSans_700Bold,
+  });
+
+This way all existing fontFamily: "DM_Sans_700Bold" style 
+references continue to work without changing every file.
+
+---
+
+## STEP 3 — Add deep link handler and Linking import to _layout.tsx
+
+FILE: artifacts/mobile/app/_layout.tsx
+
+Add these imports at the top (after existing imports):
+import { Linking } from 'react-native';
+
+Inside RootNavigator component, add this AFTER the existing 
+onboarding redirect useEffect:
+
+  const handleDeepLink = (url: string) => {
+    if (!url) return;
+    try {
+      const parsed = new URL(url);
+      if (
+        parsed.hostname === 'stretch' && 
+        parsed.pathname.includes('session')
+      ) {
+        const targetApp = parsed.searchParams.get('targetApp');
+        const stretchId = parsed.searchParams.get('stretchId');
+        const params: Record<string, string> = {};
+        if (targetApp) params.targetApp = targetApp;
+        if (stretchId) params.stretchId = stretchId;
+        router.push({ pathname: '/stretch/session', params });
+      }
+    } catch (e) {
+      // stretchgate://stretch/session?targetApp=TikTok
+      if (url.includes('stretch/session')) {
+        const targetApp = url.split('targetApp=')[1]?.split('&')[0];
+        const stretchId = url.split('stretchId=')[1]?.split('&')[0];
+        const params: Record<string, string> = {};
+        if (targetApp) params.targetApp = decodeURIComponent(targetApp);
+        if (stretchId) params.stretchId = decodeURIComponent(stretchId);
+        router.push({ pathname: '/stretch/session', params });
+      }
+    }
+  };
+
+  useEffect(() => {
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink(url);
+    });
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      handleDeepLink(url);
+    });
+    return () => sub.remove();
+  }, []);
+
+---
+
+## STEP 4 — Create app.json with all required fields
+
+FILE: artifacts/mobile/app.json
+
+Replace the entire file with:
+
+{
+  "expo": {
+    "name": "StretchGate",
+    "slug": "mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "stretchgate",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F2820"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.stretchgate.app",
+      "buildNumber": "1",
+      "jsEngine": "hermes",
+      "entitlements": {
+        "com.apple.developer.family-controls": true,
+        "com.apple.security.application-groups": [
+          "group.com.stretchgate.app"
+        ]
+      },
+      "infoPlist": {
+        "NSUserActivityTypes": [
+          "com.apple.cocoaidentity.tokens"
+        ]
+      }
+    },
+    "android": {},
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#3A7A5C",
+          "defaultChannel": "default"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
+
+---
+
+## STEP 5 — Create app.config.js
+
+CREATE the file artifacts/mobile/app.config.js with this content.
+This is a NEW file — create it from scratch:
+
+const { withEntitlementsPlist, withInfoPlist } = require('@expo/config-plugins');
+
+module.exports = ({ config }) => {
+  // Add FamilyControls entitlement to main app target
+  config = withEntitlementsPlist(config, (cfg) => {
+    cfg.modResults['com.apple.developer.family-controls'] = true;
+    cfg.modResults['com.apple.security.application-groups'] = [
+      'group.com.stretchgate.app',
+    ];
+    return cfg;
+  });
+
+  // Add NSUserActivityTypes for Screen Time tokens
+  config = withInfoPlist(config, (cfg) => {
+    cfg.modResults['NSUserActivityTypes'] = [
+      'com.apple.cocoaidentity.tokens',
+    ];
+    return cfg;
+  });
+
+  return config;
+};
+
+---
+
+## STEP 6 — Create eas.json
+
+CREATE the file artifacts/mobile/eas.json with this content.
+This is a NEW file — create it from scratch:
+
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": false,
+        "buildConfiguration": "Debug",
+        "resourceClass": "m-medium"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "buildConfiguration": "Release",
+        "resourceClass": "m-medium"
+      }
+    },
+    "production": {
+      "ios": {
+        "buildConfiguration": "Release",
+        "resourceClass": "m-medium"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "YOUR_APPLE_ID@email.com",
+        "ascAppId": "YOUR_APP_STORE_CONNECT_APP_ID",
+        "appleTeamId": "YOUR_TEAM_ID"
+      }
+    }
+  }
+}
+
+---
+
+## STEP 7 — Create native/StretchGateNative.ts
+
+CREATE the directory artifacts/mobile/native/ if it doesn't exist.
+CREATE the file artifacts/mobile/native/StretchGateNative.ts:
+
+import { NativeModules, Platform } from 'react-native';
+
+const { StretchGateNative: NativeModule } = NativeModules;
+
+const isAvailable = Platform.OS === 'ios' && !!NativeModule;
+
+export const StretchGateNative = {
+  requestAuthorization: async (): Promise<boolean> => {
+    if (!isAvailable) {
+      console.log('[SGNative] MOCK requestAuthorization');
+      await new Promise(r => setTimeout(r, 800));
+      return true;
+    }
+    return NativeModule.requestAuthorization();
+  },
+
+  presentAppPicker: async (): Promise<string> => {
+    if (!isAvailable) {
+      console.log('[SGNative] MOCK presentAppPicker');
+      await new Promise(r => setTimeout(r, 500));
+      return JSON.stringify({ mock: true });
+    }
+    return NativeModule.presentAppPicker();
+  },
+
+  saveSelection: (selectionJson: string): void => {
+    if (!isAvailable) {
+      console.log('[SGNative] MOCK saveSelection');
+      return;
+    }
+    NativeModule.saveSelection(selectionJson);
+  },
+
+  applyRestrictions: (): void => {
+    if (!isAvailable) {
+      console.log('[SGNative] MOCK applyRestrictions');
+      return;
+    }
+    NativeModule.applyRestrictions();
+  },
+
+  liftRestrictions: (durationMinutes: number): void => {
+    if (!isAvailable) {
+      console.log('[SGNative] MOCK liftRestrictions', durationMinutes, 'min');
+      return;
+    }
+    NativeModule.liftRestrictions(durationMinutes);
+  },
+
+  getAuthorizationStatus: async (): Promise
+    'authorized' | 'denied' | 'notDetermined'
+  > => {
+    if (!isAvailable) {
+      console.log('[SGNative] MOCK getAuthorizationStatus');
+      return 'notDetermined';
+    }
+    return NativeModule.getAuthorizationStatus();
+  },
+};
+
+export default StretchGateNative;
+
+---
+
+## STEP 8 — Create services/notifications.ts
+
+CREATE the directory artifacts/mobile/services/ if it doesn't exist.
+CREATE the file artifacts/mobile/services/notifications.ts:
+
+import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+  }),
+});
+
+export interface NotificationTime {
+  hour: number;
+  minute: number;
+}
+
+const IDS = {
+  DAILY: 'sg-daily-reminder',
+  STREAK: 'sg-streak-alert',
+};
+
+export async function requestNotificationPermission(): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
+  const { status: existing } = await Notifications.getPermissionsAsync();
+  if (existing === 'granted') return true;
+  const { status } = await Notifications.requestPermissionsAsync();
+  return status === 'granted';
+}
+
+export async function scheduleDailyReminder(
+  time: NotificationTime,
+  currentStreak: number
+): Promise<void> {
+  if (Platform.OS === 'web') return;
+  await Notifications.cancelScheduledNotificationAsync(IDS.DAILY).catch(() => {});
+
+  const body = currentStreak > 0
+    ? `🔥 ${currentStreak} day streak — keep it going`
+    : 'Time to move. Your body will thank you.';
+
+  await Notifications.scheduleNotificationAsync({
+    identifier: IDS.DAILY,
+    content: {
+      title: 'StretchGate',
+      body,
+      sound: false,
+      data: { type: 'daily_reminder' },
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
+      hour: time.hour,
+      minute: time.minute,
+    },
+  });
+}
+
+export async function scheduleStreakAlert(streak: number): Promise<void> {
+  if (Platform.OS === 'web' || streak === 0) return;
+  await Notifications.cancelScheduledNotificationAsync(IDS.STREAK).catch(() => {});
+
+  await Notifications.scheduleNotificationAsync({
+    identifier: IDS.STREAK,
+    content: {
+      title: `${streak} day streak at risk 🔥`,
+      body: 'Do one stretch before midnight to keep it alive.',
+      sound: false,
+      data: { type: 'streak_alert' },
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
+      hour: 20,
+      minute: 0,
+    },
+  });
+}
+
+export async function cancelAllNotifications(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  await Notifications.cancelAllScheduledNotificationsAsync();
+}
+
+export async function handleSessionCompleted(streak: number): Promise<void> {
+  if (Platform.OS === 'web') return;
+  await Notifications.cancelScheduledNotificationAsync(IDS.STREAK).catch(() => {});
+  await scheduleStreakAlert(streak + 1);
+}
+
+---
+
+## STEP 9 — Update AppContext.tsx
+
+FILE: artifacts/mobile/context/AppContext.tsx
+
+ADD this import at the top after existing imports:
+import {
+  scheduleDailyReminder,
+  scheduleStreakAlert,
+  cancelAllNotifications,
+  handleSessionCompleted,
+} from '@/services/notifications';
+
+ADD reminderTime to AppSettings interface:
+  reminderTime?: { hour: number; minute: number };
+
+ADD to DEFAULT_SETTINGS:
+  reminderTime: { hour: 9, minute: 0 },
+
+UPDATE recordSession — after the setSessions call add 
+notification handling. The full updated recordSession:
+
+  const recordSession = useCallback(async (
+    session: Omit<StretchSession, 'id' | 'completedAt'>
+  ) => {
+    const now = new Date().toISOString();
+    const oneMinAgo = new Date(Date.now() - 60000).toISOString();
+
+    setSessions(prev => {
+      const recentDupe = prev.find(
+        s => s.stretchId === session.stretchId && s.completedAt > oneMinAgo
+      );
+      if (recentDupe) return prev;
+
+      const newSession: StretchSession = {
+        ...session,
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        completedAt: now,
+      };
+      const newSessions = [newSession, ...prev];
+      AsyncStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(newSessions));
+      return newSessions;
+    });
+
+    // Reschedule streak alert since user just completed a stretch
+    try {
+      const streak = calculateStreak(sessions);
+      await handleSessionCompleted(streak);
+    } catch (e) {
+      console.warn('[SGNotif] reschedule failed:', e);
+    }
+  }, [sessions]);
+
+UPDATE updateSettings — after the setSettings call, handle 
+notification rescheduling. The full updated updateSettings:
+
+  const updateSettings = useCallback(async (
+    updates: Partial<AppSettings>
+  ) => {
+    setSettings(prev => {
+      const next = { ...prev, ...updates };
+      AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(next));
+
+      // Handle notification scheduling changes
+      if ('reminderEnabled' in updates || 'reminderTime' in updates) {
+        if (next.reminderEnabled) {
+          const time = next.reminderTime ?? { hour: 9, minute: 0 };
+          const streak = calculateStreak(sessions);
+          scheduleDailyReminder(time, streak).catch(() => {});
+          scheduleStreakAlert(streak).catch(() => {});
+        } else {
+          cancelAllNotifications().catch(() => {});
+        }
+      }
+
+      return next;
+    });
+  }, [sessions]);
+
+---
+
+## STEP 10 — Update settings.tsx: replace honor-system Screen Time 
+section with real FamilyControls UI
+
+FILE: artifacts/mobile/app/(tabs)/settings.tsx
+
+ADD this import at the top:
+import { StretchGateNative } from '@/native/StretchGateNative';
+import { requestNotificationPermission, scheduleDailyReminder, cancelAllNotifications } from '@/services/notifications';
+
+REPLACE the entire SCREEN TIME section. Find the comment 
+"── Screen Time ────────────────────────────────" and the 
+Animated.View that contains it, and replace the entire 
+Animated.View with:
+
+        <Animated.View entering={FadeInDown.duration(380)}>
+          <Section title="SCREEN TIME">
+            <View style={styles.stCard}>
+              <View style={styles.stHeader}>
+                <View style={[styles.stIconWrap, { backgroundColor: Colors.primaryMuted }]}>
+                  <Ionicons name="shield-checkmark-outline" size={22} color={Colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.stTitle}>App Gating</Text>
+                  <Text style={styles.stBody}>
+                    StretchGate uses Apple Screen Time to block your chosen apps until you complete a stretch.
+                  </Text>
+                </View>
+              </View>
+              <ScreenTimeStatusRow done={settings.isLockActive} />
+              <Pressable
+                style={[styles.stBtn, { backgroundColor: Colors.primary }]}
+                onPress={handleScreenTimeSetup}
+              >
+                <Ionicons name="shield-checkmark-outline" size={15} color={Colors.white} />
+                <Text style={styles.stBtnText}>
+                  {settings.isLockActive
+                    ? 'Reconfigure Gated Apps'
+                    : 'Set Up App Gating'}
+                </Text>
+              </Pressable>
+              {settings.isLockActive && (
+                <Pressable
+                  style={[styles.stBtn, { backgroundColor: Colors.errorMuted, marginTop: 8 }]}
+                  onPress={handleDisableLock}
+                >
+                  <Ionicons name="lock-open-outline" size={15} color={Colors.error} />
+                  <Text style={[styles.stBtnText, { color: Colors.error }]}>
+                    Disable All Gating
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          </Section>
+        </Animated.View>
+
+ADD a NOTIFICATIONS section after the Screen Time section 
+and before the MINDFUL GATES section:
+
+        <Animated.View entering={FadeInDown.duration(380).delay(55)}>
+          <Section title="NOTIFICATIONS">
+            <Row
+              icon="notifications-outline"
+              iconBg={Colors.accentMuted}
+              iconColor={Colors.accent}
+              label="Daily reminder"
+              sub={
+                settings.reminderEnabled && settings.reminderTime
+                  ? `Fires at ${String(settings.reminderTime.hour).padStart(2,'0')}:${String(settings.reminderTime.minute).padStart(2,'0')}`
+                  : 'Off'
+              }
+              divider={!!settings.reminderEnabled}
+              right={
+                <Switch
+                  value={settings.reminderEnabled}
+                  onValueChange={handleToggleReminder}
+                  trackColor={{ false: Colors.bgSurface, true: Colors.primary }}
+                  thumbColor={Colors.white}
+                  ios_backgroundColor={Colors.bgSurface}
+                />
+              }
+            />
+            {settings.reminderEnabled && (
+              <Row
+                icon="time-outline"
+                iconBg={Colors.primaryMuted}
+                iconColor={Colors.primary}
+                label="Reminder time"
+                value={
+                  settings.reminderTime
+                    ? `${String(settings.reminderTime.hour).padStart(2,'0')}:${String(settings.reminderTime.minute).padStart(2,'0')}`
+                    : '09:00'
+                }
+                onPress={handleChangeReminderTime}
+                divider={false}
+              />
+            )}
+          </Section>
+        </Animated.View>
+
+ADD these handler functions inside the SettingsScreen component,
+after the existing handler functions (toggleApp, toggleArea etc):
+
+  const handleScreenTimeSetup = async () => {
+    if (Platform.OS !== 'web')
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const authorized = await StretchGateNative.requestAuthorization();
+      if (authorized) {
+        await updateSettings({ isLockActive: true });
+      }
+    } catch (e) {
+      Alert.alert(
+        'Setup Failed',
+        'Could not set up Screen Time gating. Make sure you have granted permission in Settings.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  const handleDisableLock = () => {
+    Alert.alert(
+      'Disable App Gating',
+      'This will remove all stretch requirements for your gated apps. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disable',
+          style: 'destructive',
+          onPress: async () => {
+            StretchGateNative.liftRestrictions(0);
+            await updateSettings({ isLockActive: false });
+          },
+        },
+      ]
+    );
+  };
+
+  const handleToggleReminder = async (value: boolean) => {
+    if (Platform.OS !== 'web') await Haptics.selectionAsync();
+    if (value) {
+      const granted = await requestNotificationPermission();
+      if (!granted) {
+        Alert.alert(
+          'Notifications Blocked',
+          'Enable notifications for StretchGate in Settings to use reminders.',
+          [
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
+        return;
+      }
+    }
+    await updateSettings({ reminderEnabled: value });
+  };
+
+  const handleChangeReminderTime = () => {
+    // Simple time picker using Alert for MVP
+    // Shows hour options — full DateTimePicker can be added later
+    Alert.alert(
+      'Reminder Time',
+      'Choose when to send your daily reminder',
+      [
+        { text: '7:00 AM',  onPress: () => updateSettings({ reminderTime: { hour: 7,  minute: 0 } }) },
+        { text: '8:00 AM',  onPress: () => updateSettings({ reminderTime: { hour: 8,  minute: 0 } }) },
+        { text: '9:00 AM',  onPress: () => updateSettings({ reminderTime: { hour: 9,  minute: 0 } }) },
+        { text: '12:00 PM', onPress: () => updateSettings({ reminderTime: { hour: 12, minute: 0 } }) },
+        { text: '6:00 PM',  onPress: () => updateSettings({ reminderTime: { hour: 18, minute: 0 } }) },
+        { text: '8:00 PM',  onPress: () => updateSettings({ reminderTime: { hour: 20, minute: 0 } }) },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+REMOVE the old screenTimeDone useState since it is replaced:
+Delete: const [screenTimeDone, setScreenTimeDone] = useState(false);
+Delete: the openScreenTime function
+
+---
+
+## STEP 11 — Update session.tsx to call native unlock
+
+FILE: artifacts/mobile/app/stretch/session.tsx
+
+ADD this import near the top after existing imports:
+import { StretchGateNative } from '@/native/StretchGateNative';
+
+FIND handleComplete and REPLACE with:
+
+  const handleComplete = async () => {
+    if (!stretch) return;
+
+    // Lift the OS-level restriction if this was a gated app session
+    if (targetApp) {
+      try {
+        StretchGateNative.liftRestrictions(15);
+      } catch (e) {
+        console.warn('[SGNative] liftRestrictions error:', e);
+      }
+    }
+
+    await recordSession({
+      stretchId: stretch.id,
+      stretchName: stretch.name,
+      durationSeconds: elapsed,
+      targetApp,
+    });
+
+    router.back();
+  };
+
+---
+
+## STEP 12 — Update onboarding.tsx to call native auth
+
+FILE: artifacts/mobile/app/onboarding.tsx
+
+ADD this import near the top:
+import { StretchGateNative } from '@/native/StretchGateNative';
+
+FIND the requestFamilyControlsAuth function inside PermissionsStep:
+
+  const requestFamilyControlsAuth = async (): Promise<boolean> => {
+    console.log("requesting auth");
+    await new Promise((res) => setTimeout(res, 1000));
+    return true;
+  };
+
+REPLACE it with:
+
+  const requestFamilyControlsAuth = async (): Promise<boolean> => {
+    return StretchGateNative.requestAuthorization();
+  };
+
+---
+
+## STEP 13 — Run TypeScript check
+
+Run: cd artifacts/mobile && npx tsc --noEmit 2>&1
+
+Fix ALL remaining errors. Common ones to watch for:
+- Any implicit 'any' in filter/map callbacks — add : StretchSession type
+- Missing children in Section component — already fixed in AppContext
+- key prop issues — key is never part of a component's prop interface
+
+Report every error and how you fixed it.
+Target: 0 TypeScript errors.
+
+---
+
+## STEP 14 — Run expo prebuild
+
+This generates the /ios folder with native Xcode project.
+Run from artifacts/mobile directory:
+
+cd artifacts/mobile
+npx expo prebuild --platform ios --clean 2>&1
+
+This will:
+- Generate the ios/ folder
+- Create StretchGate.xcworkspace
+- Apply entitlements from app.config.js
+- Set up the bundle ID com.stretchgate.app
+- Apply the FamilyControls entitlement
+
+If it asks "Do you want to install CocoaPods?" — answer YES.
+
+Wait for it to complete. It may take 3-5 minutes.
+
+After it finishes, verify:
+ls ios/
+
+You should see: StretchGate.xcworkspace, StretchGate/, Podfile, etc.
+
+---
+
+## STEP 15 — Write Swift native files into /ios
+
+Now that /ios exists, create these Swift files.
+
+### FILE 1: ios/StretchGate/StretchGateNative.swift
+
+Create this file with exactly this content:
+
+import Foundation
+import FamilyControls
+import ManagedSettings
+import DeviceActivity
+
+@objc(StretchGateNative)
+class StretchGateNative: NSObject {
+
+  private let store = ManagedSettingsStore()
+  private let activityCenter = DeviceActivityCenter()
+  private var selection = FamilyActivitySelection()
+
+  @objc func requestAuthorization(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    Task {
+      do {
+        try await AuthorizationCenter.shared
+          .requestAuthorization(for: .individual)
+        DispatchQueue.main.async { resolve(true) }
+      } catch {
+        DispatchQueue.main.async {
+          reject("AUTH_ERROR", error.localizedDescription, error)
+        }
+      }
+    }
+  }
+
+  @objc func applyRestrictions() {
+    guard !selection.applicationTokens.isEmpty else { return }
+    store.shield.applications = selection.applicationTokens
+  }
+
+  @objc func liftRestrictions(_ durationMinutes: Int) {
+    // Clear the shield immediately
+    store.clearAllSettings()
+
+    // If duration > 0, schedule re-apply via DeviceActivityMonitor
+    guard durationMinutes > 0 else { return }
+
+    let name = DeviceActivityName("stretchgate.relock")
+    let now = Calendar.current.dateComponents(
+      [.hour, .minute, .second], from: Date()
+    )
+
+    var endComponents = DateComponents()
+    let totalMinutes = (now.hour ?? 0) * 60 + (now.minute ?? 0) + durationMinutes
+    endComponents.hour = totalMinutes / 60
+    endComponents.minute = totalMinutes % 60
+
+    let schedule = DeviceActivitySchedule(
+      intervalStart: now,
+      intervalEnd: endComponents,
+      repeats: false
+    )
+
+    do {
+      try activityCenter.startMonitoring(name, during: schedule)
+    } catch {
+      print("[StretchGate] DeviceActivity schedule error:", error)
+    }
+  }
+
+  @objc func saveSelection(_ selectionData: String) {
+    guard
+      let data = selectionData.data(using: .utf8),
+      let decoded = try? JSONDecoder().decode(
+        FamilyActivitySelection.self, from: data
+      )
+    else {
+      print("[StretchGate] Failed to decode selection")
+      return
+    }
+    selection = decoded
+
+    // Save to App Group shared container so the extension can read it
+    let defaults = UserDefaults(suiteName: "group.com.stretchgate.app")
+    defaults?.set(selectionData, forKey: "savedSelection")
+    defaults?.synchronize()
+  }
+
+  @objc func getAuthorizationStatus(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    let status = AuthorizationCenter.shared.authorizationStatus
+    switch status {
+    case .approved:
+      resolve("authorized")
+    case .denied:
+      resolve("denied")
+    default:
+      resolve("notDetermined")
+    }
+  }
+
+  @objc static func requiresMainQueueSetup() -> Bool {
+    return false
+  }
+}
+
+
+### FILE 2: ios/StretchGate/StretchGateNative.m
+
+Create this file with exactly this content:
+
+#import <React/RCTBridgeModule.h>
+
+@interface RCT_EXTERN_MODULE(StretchGateNative, NSObject)
+
+RCT_EXTERN_METHOD(
+  requestAuthorization:(RCTPromiseResolveBlock)resolve
+  rejecter:(RCTPromiseRejectBlock)reject
+)
+
+RCT_EXTERN_METHOD(applyRestrictions)
+
+RCT_EXTERN_METHOD(liftRestrictions:(int)durationMinutes)
+
+RCT_EXTERN_METHOD(saveSelection:(NSString *)selectionData)
+
+RCT_EXTERN_METHOD(
+  getAuthorizationStatus:(RCTPromiseResolveBlock)resolve
+  rejecter:(RCTPromiseRejectBlock)reject
+)
+
+@end
+
+
+### FILE 3: ios/StretchGateMonitor/StretchGateMonitorExtension.swift
+
+First create the directory:
+mkdir -p ios/StretchGateMonitor
+
+Then create the file with exactly this content:
+
+import DeviceActivity
+import ManagedSettings
+import FamilyControls
+
+class StretchGateMonitorExtension: DeviceActivityMonitor {
+
+  let store = ManagedSettingsStore()
+
+  // Called when the unlock window ends — re-apply the shield
+  override func intervalDidEnd(for activity: DeviceActivityName) {
+    guard activity.rawValue == "stretchgate.relock" else { return }
+
+    let defaults = UserDefaults(suiteName: "group.com.stretchgate.app")
+
+    guard
+      let selectionData = defaults?.string(forKey: "savedSelection"),
+      let data = selectionData.data(using: .utf8),
+      let selection = try? JSONDecoder().decode(
+        FamilyActivitySelection.self,
+        from: data
+      )
+    else {
+      print("[StretchGateMonitor] No saved selection found")
+      return
+    }
+
+    store.shield.applications = selection.applicationTokens
+    print("[StretchGateMonitor] Re-applied shield for",
+          selection.applicationTokens.count, "apps")
+  }
+
+  // Called at the start of each monitored interval
+  override func intervalDidStart(for activity: DeviceActivityName) {
+    // Nothing to do at start — shield was already lifted by main app
+  }
+}
+
+
+### FILE 4: ios/StretchGateMonitor/Info.plist
+
+Create this file with exactly this content:
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleDisplayName</key>
+  <string>StretchGateMonitor</string>
+  <key>CFBundleExecutable</key>
+  <string>$(EXECUTABLE_NAME)</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.stretchgate.app.StretchGateMonitor</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>$(PRODUCT_NAME)</string>
+  <key>CFBundlePackageType</key>
+  <string>XPC!</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+  <key>NSExtension</key>
+  <dict>
+    <key>NSExtensionPointIdentifier</key>
+    <string>com.apple.deviceactivity.monitor</string>
+    <key>NSExtensionPrincipalClass</key>
+    <string>$(PRODUCT_MODULE_NAME).StretchGateMonitorExtension</string>
+  </dict>
+</dict>
+</plist>
+
+
+---
+
+## STEP 16 — Write Xcode project instructions file
+
+CREATE the file artifacts/mobile/XCODE_SETUP

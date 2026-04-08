@@ -27,13 +27,13 @@ import {
 } from "@/services/notifications";
 import type { ReminderTime, ReminderHourConfig } from "@/services/notifications";
 import {
-  requestFamilyControlsAuth,
   getFamilyControlsStatus,
   openFamilyActivityPicker,
   hasSavedAppSelection,
   isNativeAvailable,
 } from "@/services/familyControls";
 import type { FamilyControlsStatus } from "@/services/familyControls";
+import { StretchGateNative } from "@/native/StretchGateNative";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -355,15 +355,33 @@ export default function SettingsScreen() {
       updateSettings({ familyControlsAuthorized: true });
   }, []);
 
-  const handleRequestFC = async () => {
+  const handleScreenTimeSetup = async () => {
     if (Platform.OS !== "ios") return;
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setFcLoading(true);
     try {
-      const status = await requestFamilyControlsAuth();
-      setFcStatus(status);
-      await updateSettings({ familyControlsAuthorized: status === "authorized" });
+      const granted = await StretchGateNative.requestAuthorization();
+      setFcStatus(granted ? "authorized" : "denied");
+      await updateSettings({
+        familyControlsAuthorized: granted,
+        isLockActive: granted,
+        gatesActive: granted,
+      });
     } finally { setFcLoading(false); }
+  };
+
+  const handleDisableLock = async () => {
+    if (Platform.OS !== "web") await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    StretchGateNative.liftRestrictions(0);
+    await updateSettings({ isLockActive: false, gatesActive: false });
+  };
+
+  const handleToggleReminder = async (enabled: boolean) => {
+    await toggleReminderMaster(enabled);
+  };
+
+  const handleChangeReminderTime = async (time: { hour: number; minute: number }) => {
+    await updateSettings({ reminderTime: time });
   };
 
   // Time picker
@@ -482,15 +500,18 @@ export default function SettingsScreen() {
     ? settings.focusBodyAreas[0] : `${settings.focusBodyAreas.length} areas`;
   const durationLabel = `${settings.preferredDuration}s`;
 
-  const fcLabel = fcStatus === "authorized"
-    ? "Active"
+  const fcLabel = settings.isLockActive
+    ? "Gating active"
+    : fcStatus === "authorized"
+    ? "Authorized"
     : fcStatus === "denied"
     ? "Denied"
     : !isNativeAvailable()
     ? "Dev build required"
-    : "Not authorized";
+    : "Not set up";
 
   const canRequestFC = fcStatus !== "authorized" && !fcLoading && isNativeAvailable();
+  const canDisableLock = settings.isLockActive && isNativeAvailable();
 
   return (
     <SafeAreaView style={s.container} edges={["top"]}>
@@ -508,13 +529,24 @@ export default function SettingsScreen() {
         <Section title="SCREEN TIME">
           <NavRow
             icon="shield-checkmark-outline"
-            iconBg={fcStatus === "authorized" ? Colors.primaryMuted : "rgba(201,106,50,0.1)"}
-            iconColor={fcStatus === "authorized" ? Colors.primary : Colors.accent}
+            iconBg={settings.isLockActive ? Colors.primaryMuted : fcStatus === "authorized" ? Colors.primaryMuted : "rgba(201,106,50,0.1)"}
+            iconColor={settings.isLockActive ? Colors.primary : fcStatus === "authorized" ? Colors.primary : Colors.accent}
             label="Apple Screen Time"
             value={fcLabel}
-            onPress={canRequestFC ? handleRequestFC : undefined}
-            divider={false}
+            onPress={canRequestFC ? handleScreenTimeSetup : undefined}
+            divider={canDisableLock}
           />
+          {canDisableLock && (
+            <NavRow
+              icon="lock-open-outline"
+              iconBg="rgba(201,106,50,0.1)"
+              iconColor={Colors.accent}
+              label="Disable app gating"
+              labelColor={Colors.accent}
+              onPress={handleDisableLock}
+              divider={false}
+            />
+          )}
         </Section>
 
         {/* ── Apps to Lock ──────────────────────────────────────── */}
