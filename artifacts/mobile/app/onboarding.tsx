@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   ActivityIndicator,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -143,7 +144,11 @@ function SplashStep({
       onPress={() => { if (canTap) onAdvance(); }}
     >
       <Reanimated.View style={[spl.iconBox, iconStyle]}>
-        <Ionicons name="leaf" size={72} color={Colors.primary} />
+        <Image
+          source={require("../assets/images/icon.png")}
+          style={spl.logo}
+          resizeMode="contain"
+        />
       </Reanimated.View>
       <Reanimated.Text style={[spl.title, titleStyle]}>Streach Gate</Reanimated.Text>
       <Reanimated.Text style={[spl.tagline, taglineStyle]}>Earn your scroll.</Reanimated.Text>
@@ -163,13 +168,15 @@ const spl = StyleSheet.create({
     justifyContent: "center",
   },
   iconBox: {
-    width: 148,
-    height: 148,
-    borderRadius: 74,
-    backgroundColor: Colors.primaryMuted,
-    alignItems: "center",
-    justifyContent: "center",
+    width: 150,
+    height: 150,
+    borderRadius: 34,
     marginBottom: 40,
+    overflow: "hidden",
+  },
+  logo: {
+    width: 150,
+    height: 150,
   },
   title: {
     fontSize: 42,
