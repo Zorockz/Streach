@@ -1064,12 +1064,20 @@ function PermissionsStep({
         await requestReminderPermissions();
       }
       if (!isNativeAvailable()) {
-        // Native module not linked — dev build required. Skip gracefully.
         onNext();
         return;
       }
       const granted = await StretchGateNative.requestAuthorization();
       if (granted) {
+        try {
+          const result = await StretchGateNative.presentAppPicker();
+          const parsed = JSON.parse(result);
+          if (parsed.selected || parsed.mock) {
+            StretchGateNative.applyRestrictions();
+          }
+        } catch {
+          // App picker cancelled or failed — user can configure later in Settings
+        }
         onNext();
       } else {
         setError("Screen Time access was not granted. You can grant it later in Settings.");

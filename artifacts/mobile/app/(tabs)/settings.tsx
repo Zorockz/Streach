@@ -7,7 +7,6 @@ import {
   FlatList,
   Linking,
   Modal,
-  NativeModules,
   Platform,
   Pressable,
   ScrollView,
@@ -18,7 +17,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
-import { STRETCH_CATEGORIES, DISTRACTING_APPS, BodyArea } from "@/constants/stretches";
+import { STRETCH_CATEGORIES, BodyArea } from "@/constants/stretches";
 import { useApp } from "@/context/AppContext";
 import {
   requestReminderPermissions,
@@ -238,52 +237,6 @@ function ListPickerModal<T extends { value: any; label: string }>({
   );
 }
 
-// ── App selection modal ───────────────────────────────────────────────
-
-function AppSelectionModal({
-  visible, selected, onToggle, onClose,
-}: {
-  visible: boolean; selected: string[]; onToggle: (id: string) => void; onClose: () => void;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={m.overlay} onPress={onClose} />
-      <View style={[m.sheet, { maxHeight: "75%" }]}>
-        <View style={m.handle} />
-        <Text style={m.title}>Apps to Lock</Text>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {DISTRACTING_APPS.map((app, i) => {
-            const on = selected.includes(app.id);
-            return (
-              <Pressable
-                key={app.id}
-                style={[m.option, i === DISTRACTING_APPS.length - 1 && { borderBottomWidth: 0 }]}
-                onPress={() => onToggle(app.id)}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
-                  <View style={[{ width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: app.color + "20" }]}>
-                    <Ionicons
-                      name={app.icon as any} size={18}
-                      color={app.color === "#010101" || app.color === "#FFCA00" ? Colors.text : app.color}
-                    />
-                  </View>
-                  <Text style={m.optText}>{app.name}</Text>
-                </View>
-                <View style={[{ width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: Colors.divider, alignItems: "center", justifyContent: "center" }, on && { backgroundColor: Colors.primary, borderColor: Colors.primary }]}>
-                  {on && <Ionicons name="checkmark" size={13} color={Colors.white} />}
-                </View>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-        <Pressable style={[m.cancel, { backgroundColor: Colors.primary, borderRadius: 14, marginTop: 8 }]} onPress={onClose}>
-          <Text style={[m.cancelText, { color: Colors.white, fontFamily: "DM_Sans_600SemiBold" }]}>Done</Text>
-        </Pressable>
-      </View>
-    </Modal>
-  );
-}
-
 // ── Focus area modal ──────────────────────────────────────────────────
 
 function FocusAreaModal({
@@ -397,7 +350,6 @@ export default function SettingsScreen() {
   };
 
   // Modal visibility
-  const [showApps, setShowApps] = useState(false);
   const [showFocus, setShowFocus] = useState(false);
   const [showDuration, setShowDuration] = useState(false);
   const [showGoal, setShowGoal] = useState(false);
@@ -421,14 +373,6 @@ export default function SettingsScreen() {
   );
 
   // Handlers
-  const toggleApp = async (id: string) => {
-    if (Platform.OS !== "web") await Haptics.selectionAsync();
-    const updated = settings.lockedApps.includes(id)
-      ? settings.lockedApps.filter(a => a !== id)
-      : [...settings.lockedApps, id];
-    await updateSettings({ lockedApps: updated });
-  };
-
   const toggleArea = async (id: BodyArea) => {
     if (Platform.OS !== "web") await Haptics.selectionAsync();
     const updated = settings.focusBodyAreas.includes(id)
@@ -477,24 +421,41 @@ export default function SettingsScreen() {
   // Native FamilyActivityPicker handler
   const handleOpenApps = async () => {
     if (Platform.OS !== "web") await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (isNativeAvailable()) {
-      // Use Apple's native FamilyActivityPicker — saves selection internally to App Group
-      await openFamilyActivityPicker();
-      // Reflect that a selection exists (actual selection is opaque, stored natively)
-      await updateSettings({ lockedApps: hasSavedAppSelection() ? ["__native_selection__"] : [] });
-    } else {
-      // Dev build not available — use JS fallback picker
-      setShowApps(true);
+    if (!isNativeAvailable()) {
+      Alert.alert(
+        "Development Build Required",
+        "The native Screen Time picker is only available in a development or production build (EAS Build). It cannot run in Expo Go.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+    if (fcStatus !== "authorized") {
+      Alert.alert(
+        "Screen Time Not Authorized",
+        "Please enable Screen Time access first before selecting apps to lock.",
+        [{ text: "Set Up", onPress: handleScreenTimeSetup }, { text: "Cancel", style: "cancel" }]
+      );
+      return;
+    }
+    const selected = await openFamilyActivityPicker();
+    if (selected && hasSavedAppSelection()) {
+      await updateSettings({ lockedApps: ["__native_selection__"] });
+      StretchGateNative.applyRestrictions();
+      await updateSettings({ isLockActive: true, gatesActive: true });
     }
   };
 
+  const handleReapplyShield = async () => {
+    if (Platform.OS !== "web") await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    StretchGateNative.applyRestrictions();
+    await updateSettings({ isLockActive: true, gatesActive: true });
+  };
+
   // Derived values for display
-  const nativeSelectionActive = isNativeAvailable() && hasSavedAppSelection();
-  const appsLabel = nativeSelectionActive
-    ? "Selected (native)"
-    : settings.lockedApps.length === 0
-    ? "None selected"
-    : `${settings.lockedApps.length} app${settings.lockedApps.length > 1 ? "s" : ""}`;
+  const hasNativeSelection = isNativeAvailable() && hasSavedAppSelection();
+  const appsLabel = hasNativeSelection
+    ? (settings.isLockActive ? "Active" : "Selected")
+    : "None selected";
   const focusLabel = settings.focusBodyAreas.length === 0
     ? "All areas" : settings.focusBodyAreas.length === 1
     ? settings.focusBodyAreas[0] : `${settings.focusBodyAreas.length} areas`;
@@ -554,11 +515,21 @@ export default function SettingsScreen() {
           <NavRow
             icon="lock-closed-outline"
             iconBg="rgba(58,122,92,0.1)"
-            label={isNativeAvailable() ? "Choose with Screen Time" : "Apps"}
+            label="Choose apps"
             value={appsLabel}
             onPress={handleOpenApps}
-            divider={false}
+            divider={hasNativeSelection && !settings.isLockActive}
           />
+          {hasNativeSelection && !settings.isLockActive && (
+            <NavRow
+              icon="shield-checkmark-outline"
+              iconBg={Colors.primaryMuted}
+              iconColor={Colors.primary}
+              label="Enable app gating"
+              onPress={handleReapplyShield}
+              divider={false}
+            />
+          )}
         </Section>
 
         {/* ── Lock Schedule (reminders) ─────────────────────────── */}
@@ -698,12 +669,6 @@ export default function SettingsScreen() {
         current={currentHoursFor(pickerTarget)}
         onSelect={handleTimeSelect}
         onClose={() => setPickerVisible(false)}
-      />
-      <AppSelectionModal
-        visible={showApps}
-        selected={settings.lockedApps}
-        onToggle={toggleApp}
-        onClose={() => setShowApps(false)}
       />
       <FocusAreaModal
         visible={showFocus}
